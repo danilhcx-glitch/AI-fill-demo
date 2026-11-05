@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 填写全场景 Demo</title>
+<style>
+:root{
+  /* layout: 左侧按真实 query 类型分组的场景 / 中间模拟 WPS 文字窗口 + 简约对话框 / 右侧设计说明 */
+  --bg:#ECEEF2; --win:#FFFFFF; --chrome:#F7F8FA; --docbg:#E6E8EC;
+  --ink:#1F2329; --ink-2:#4E5969; --ink-3:#5F6670; --ph:#8A9099; --line:#DEE0E3; --line-2:#C4C9D0; --cell:#B8BEC7;
+  --accent:#2F6BFF; --accent-ink:#1A4FD6; --accent-bg:#EAF1FF; --accent-line:#8EADFF; --sel:#D5E3FF;
+  --ok:#0B7A55; --ok-bg:#E3F5EC; --warn:#9A4A00; --warn-bg:#FFF3E0; --hl:#FFE7A0;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC","Hiragino Sans GB",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);font-family:var(--font);color:var(--ink);font-size:14px;line-height:1.6}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+input,textarea{background-color:#FFFFFF;color:var(--ink);font-family:inherit}
+input::placeholder,textarea::placeholder{color:var(--ph)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.top{max-width:1520px;margin:0 auto;padding:18px 20px 12px;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px}
+.top h1{font-size:19px;margin:0;font-weight:600}
+.top p{margin:0;color:var(--ink-2);font-size:13px}
+.top .demo-tag{font-size:12px;color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:4px}
+
+.layout{max-width:1520px;margin:0 auto;padding:0 20px 28px;display:grid;grid-template-columns:236px minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:1200px){.layout{grid-template-columns:220px minmax(0,1fr)}.notes{grid-column:1/-1}}
+@media (max-width:780px){.layout{grid-template-columns:1fr}}
+
+.scen{background:var(--win);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:12px}
+@media (max-width:780px){.scen{position:static}}
+.scen h2{font-size:12px;color:var(--ink-3);font-weight:500;margin:10px 8px 2px;display:flex;justify-content:space-between;gap:6px}
+.scen h2:first-child{margin-top:2px}
+.scen h2 em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+.scen button{text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;font-size:13px;color:var(--ink);display:flex;gap:8px;align-items:center}
+.scen button:hover{background:var(--chrome)}
+.scen button[aria-current="true"]{background:var(--accent-bg);color:var(--accent-ink);font-weight:600}
+.scen .n{font-size:11px;color:var(--ink-3);width:16px;flex:none;font-variant-numeric:tabular-nums}
+.scen button[aria-current="true"] .n{color:var(--accent-ink)}
+.scen .src-note{font-size:11px;color:var(--ink-3);margin:10px 8px 0;line-height:1.5}
+
+.win{background:var(--win);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.tabs{display:flex;align-items:center;gap:4px;background:#E9EBEF;padding:6px 8px 0}
+.tab{font-size:12px;padding:6px 14px;border-radius:6px 6px 0 0;color:var(--ink-2);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.tab.on{background:var(--win);color:var(--ink)}
+.tab .w{width:14px;height:14px;border-radius:3px;background:#2F6BFF;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.menu{display:flex;gap:18px;padding:8px 16px;font-size:13px;color:var(--ink-2);border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap}
+.menu .on{color:var(--accent-ink);font-weight:600;border-bottom:2px solid var(--accent);padding-bottom:2px}
+.ribbon{display:flex;align-items:stretch;gap:2px;padding:8px 12px;background:var(--chrome);border-bottom:1px solid var(--line);overflow-x:auto}
+.rb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:56px;padding:4px 6px;font-size:12px;color:var(--ink-2);border-radius:6px;white-space:nowrap}
+.rb svg{width:20px;height:20px}
+.sep{width:1px;background:var(--line);margin:4px 6px}
+.aibtn-wrap{position:relative}
+.aibtn{border:1px solid transparent;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px;padding:4px 8px;font-size:12px;border-radius:6px;color:var(--ink)}
+.aibtn:hover,.aibtn[aria-expanded="true"]{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-ink)}
+.aibtn svg{width:20px;height:20px}
+.aibtn .beta{font-size:10px;color:var(--accent-ink);background:var(--accent-bg);border-radius:3px;padding:0 4px;line-height:15px;margin-left:2px}
+.tip{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);width:250px;background:var(--win);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;box-shadow:0 8px 24px rgba(31,35,41,.12);font-size:12px;color:var(--ink-2);z-index:20;display:none;text-align:left}
+.aibtn-wrap:hover .tip{display:block}
+.tip b{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}
+@media (max-width:780px){.tip{left:0;transform:none}}
+
+.docbg{background:var(--docbg);padding:24px 16px 40px}
+.page{background:var(--win);max-width:780px;margin:0 auto;padding:40px 52px 56px;min-height:620px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+@media (max-width:620px){.page{padding:28px 18px}}
+.page h3{font-size:20px;margin:0 0 14px;font-weight:600;text-align:center}
+.page h4{font-size:15px;margin:18px 0 8px;font-weight:600}
+.page p{margin:0 0 10px;font-size:14px;line-height:1.8}
+.page .muted{color:var(--ink-3)}
+.src{border-radius:3px;transition:background .15s}
+.src.hl{background:var(--hl);box-shadow:0 0 0 2px var(--hl)}
+
+.tblwrap{position:relative;margin:12px 0 0;overflow-x:auto}
+table.t{border-collapse:collapse;width:100%;table-layout:fixed;font-size:13px;user-select:none}
+table.t td{border:1px solid #2B2F36;height:34px;padding:4px 8px;vertical-align:middle;word-break:break-all;line-height:1.5;transition:background .3s;cursor:cell}
+table.t td.h{font-weight:600}
+table.t td.l{color:var(--ink-2)}
+table.t td.big{height:64px;vertical-align:top}
+table.t td.tgt{background:var(--accent-bg)}
+table.t td.sel{background:var(--sel)}
+table.t td.pv{background:#F2F7FF;color:var(--accent-ink)}
+table.t td.skel{background:var(--accent-bg);animation:pulse 1s ease-in-out infinite}
+table.t td[data-src]{cursor:help}
+table.t td .old{display:block;font-size:11px;color:var(--ink-3);text-decoration:line-through}
+table.t td.just{animation:flash 1.4s ease-out}
+.swap{display:inline-block;margin-left:6px;font-size:11px;border:1px solid var(--accent-line);background:var(--win);color:var(--accent-ink);border-radius:4px;padding:0 6px;line-height:18px;vertical-align:1px}
+.swap:hover{background:var(--accent-bg)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes flash{0%{background:var(--ok-bg)}100%{background:transparent}}
+
+.inhint{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--accent-line);background:rgba(234,241,255,.94);color:var(--accent-ink);font-size:13px}
+.inhint:hover{background:var(--accent-bg)}
+.inhint svg,.topchip svg{width:14px;height:14px}
+.topchip{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;flex-wrap:wrap}
+.topchip button{border:1px dashed var(--accent-line);background:var(--accent-bg);color:var(--accent-ink);font-size:13px;padding:5px 12px;border-radius:999px;display:flex;align-items:center;gap:6px}
+.topchip button.plain{border-style:solid;background:var(--win);color:var(--ink-2)}
+
+/* 简约对话框 */
+.dlg-wrap{margin-top:28px;max-width:600px}
+.dlg{border:1px solid #E1E3E7;border-radius:22px;background:#FFFFFF;box-shadow:0 6px 24px rgba(31,35,41,.08);padding:14px 14px 10px 18px;transition:border-color .15s,box-shadow .15s}
+.dlg:focus-within{border-color:#B9C9F5;box-shadow:0 6px 24px rgba(47,107,255,.10)}
+.dlg.pulse{animation:ring .8s ease-out}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(47,107,255,.40)}100%{box-shadow:0 0 0 10px rgba(47,107,255,0)}}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;max-width:220px;background:#F2F4F7;border-radius:8px;padding:3px 4px 3px 8px;font-size:12px;color:var(--ink-2)}
+.pill.selp{background:var(--accent-bg);color:var(--accent-ink)}
+.pill img{width:22px;height:22px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}
+.pill .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill button{border:none;background:none;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none}
+.pill button:hover{background:rgba(0,0,0,.06)}
+.dlg textarea{display:block;width:100%;border:none;outline:none;resize:none;font-size:15px;line-height:1.7;min-height:52px;max-height:220px;background:transparent;color:var(--ink);padding:0}
+.dlg textarea:focus-visible{outline:none}
+.dlg textarea[readonly]{color:var(--ink-3)}
+.tools{display:flex;align-items:center;gap:2px;margin-top:8px}
+.ib{position:relative;width:36px;height:36px;border-radius:8px;border:none;background:none;display:flex;align-items:center;justify-content:center;color:#30343A}
+.ib:hover{background:#F2F4F7}
+.ib svg{width:22px;height:22px}
+.ib .tt{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2B2F36;color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;display:none;pointer-events:none}
+.ib:hover .tt,.ib:focus-visible .tt{display:block}
+.ib.busy svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cnt{font-size:12px;color:var(--ph);margin-left:4px}
+.send{margin-left:auto;width:40px;height:40px;border-radius:50%;border:none;background:#E9EBEE;color:#A3A8B0;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.send svg{width:20px;height:20px}
+.send.on{background:var(--accent);color:#fff}
+.send.on:hover{background:var(--accent-ink)}
+.send.stop{background:#2B2F36;color:#fff}
+
+.stat{margin-top:10px;padding:9px 12px;border-radius:12px;background:var(--accent-bg);color:var(--accent-ink);font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.stat.ok{background:var(--ok-bg);color:var(--ok)}
+.stat.w{background:var(--warn-bg);color:var(--warn)}
+.stat.e{background:#FDECEC;color:#B42318}
+.stat.i{background:#F2F4F7;color:var(--ink-2)}
+.stat .grow{flex:1;min-width:180px}
+.stat .sub{display:block;font-size:12px;opacity:.9}
+.stat .bar{flex-basis:100%;height:3px;background:rgba(47,107,255,.15);border-radius:2px;overflow:hidden}
+.stat .bar i{display:block;height:100%;background:var(--accent);transition:width .1s}
+.sbtn{border:1px solid currentColor;background:#FFFFFF;color:inherit;padding:3px 12px;border-radius:8px;font-size:12px}
+.sbtn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.sbtn.pri:hover{background:var(--accent-ink)}
+.lnk{border:none;background:none;color:inherit;padding:2px 4px;font-size:12px;text-decoration:underline;text-underline-offset:2px}
+.optnote{margin-top:8px;font-size:12px;color:var(--ink-3);display:flex;gap:4px;align-items:center;padding-left:4px}
+.optnote .lnk{color:var(--accent-ink)}
+.sugg{margin-top:14px}
+.sugg .lb{font-size:12px;color:var(--ink-3);margin:0 0 8px 4px}
+.sugg .row{display:flex;gap:8px;flex-wrap:wrap}
+.sugg button{border:1px solid #E1E3E7;background:#FFFFFF;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;text-align:left}
+.sugg button:hover{border-color:var(--accent-line);color:var(--accent-ink);background:#F8FAFF}
+.sugg button svg{width:13px;height:13px;color:var(--accent);flex:none}
+
+.notes{background:var(--win);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:sticky;top:12px}
+@media (max-width:1200px){.notes{position:static}}
+.notes h2{font-size:15px;margin:0 0 10px;font-weight:600}
+.steps{display:flex;gap:4px;margin-bottom:14px}
+.steps span{flex:1;text-align:center;font-size:11px;padding:4px 0;border-radius:4px;background:var(--chrome);color:var(--ink-3)}
+.steps span.done{background:var(--accent-bg);color:var(--accent-ink)}
+.steps span.cur{background:var(--accent);color:#fff;font-weight:600}
+.steps span.skip{text-decoration:line-through}
+.notes dl{margin:0 0 12px;font-size:13px}
+.notes dt{font-size:12px;color:var(--ink-3);margin-top:8px}
+.notes dd{margin:2px 0 0}
+.notes ol{margin:0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:8px}
+.notes ol li::marker{color:var(--accent-ink);font-weight:600}
+.notes .why{display:block;font-size:12px;color:var(--ink-3)}
+.notes .reset{margin-top:14px;border:1px solid var(--line-2);background:var(--win);padding:6px 12px;border-radius:8px;font-size:13px}
+.notes .reset:hover{border-color:var(--accent-line);color:var(--accent-ink)}
+
+/* 探索一下 */
+.sugg button.ex{border-style:dashed;border-color:#B9C9F5;color:var(--accent-ink);background:#F8FAFF}
+.sugg button.ex:hover{background:var(--accent-bg)}
+.sugg button.ex svg{width:14px;height:14px}
+.explore{margin-top:14px;border:1px solid #E1E3E7;border-radius:16px;background:#FFFFFF;padding:14px 16px 12px;box-shadow:0 4px 16px rgba(31,35,41,.06);outline:none;transform-origin:top center}
+.explore.anim{animation:exIn .26s cubic-bezier(.2,.8,.2,1)}
+.explore.out{animation:exOut .17s ease-in forwards}
+@keyframes exIn{from{opacity:0;transform:translateY(-8px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes exOut{to{opacity:0;transform:translateY(-6px) scale(.985)}}
+.exhead{display:flex;align-items:center;gap:8px}
+.exhead h3{font-size:13px;margin:0;font-weight:500;color:var(--ink-3);text-align:left}
+.exhead .ct{font-size:12px;color:var(--ph);font-variant-numeric:tabular-nums}
+.exhead .xb{margin-left:auto;border:none;background:none;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--ink-3)}
+.exhead .xb:hover{background:#F2F4F7}
+.exbody.from-r{animation:slR .24s cubic-bezier(.2,.8,.2,1)}
+.exbody.from-l{animation:slL .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes slR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes slL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+.ph-img{aspect-ratio:2/1;border:1.5px dashed #C9CED6;border-radius:12px;background:#F7F8FA;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#8A9099;font-size:12px;margin:10px 0 12px;text-align:center;padding:12px}
+.ph-img svg{width:28px;height:28px;color:#B4BAC3}
+.ph-img b{font-weight:500;color:var(--ink-3)}
+.extitle{font-size:16px;font-weight:600;margin:0 0 4px;color:var(--ink)}
+.exdesc{font-size:13px;color:var(--ink-2);margin:0;line-height:1.7}
+.exsteps{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink-2)}
+.exsteps li{display:flex;gap:8px;align-items:flex-start}
+.exsteps .no{flex:none;width:18px;height:18px;border-radius:50%;background:var(--accent-bg);color:var(--accent-ink);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.exask{margin-top:10px;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.exask button{border:none;background:#F2F4F7;color:var(--ink);font-size:12px;padding:3px 10px;border-radius:6px}
+.exask button:hover{background:var(--accent-bg);color:var(--accent-ink)}
+.exfoot{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #F0F1F3}
+.dots{display:flex;align-items:center}
+.dots button{width:20px;height:20px;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center}
+.dots button::after{content:"";display:block;width:6px;height:6px;border-radius:3px;background:#D5D9DF;transition:width .2s,background .2s}
+.dots button.on::after{width:16px;background:var(--accent)}
+.navb{width:32px;height:32px;border-radius:50%;border:1px solid #E1E3E7;background:#FFFFFF;display:flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.navb:hover{border-color:var(--accent-line);color:var(--accent-ink)}
+.navb[aria-disabled="true"]{opacity:.35;cursor:default}
+.navb svg{width:16px;height:16px}
+.exfoot .sp{flex:1}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>AI 填写 · 全场景交互 Demo（第三版 · 简约对话框）</h1>
+  <p>一个输入框 + 优化提示词 + 上传文件；「猜你想要」点一下就提问，「探索一下」看使用说明；表格上可拖动框选</p>
+  <span class="demo-tag">演示：生成内容为预置；序号、计算、拆分、替换、查重、排序为真实计算</span>
+</header>
+
+<div class="layout">
+  <nav class="scen" id="scen" aria-label="用户场景"></nav>
+
+  <main class="win" aria-label="模拟 WPS 文字窗口">
+    <div class="tabs" aria-hidden="true">
+      <span class="tab">WPS Office</span>
+      <span class="tab on"><span class="w">W</span><span id="tabname">文字文稿1</span></span>
+    </div>
+    <div class="menu" aria-hidden="true">
+      <span>文件</span><span>开始</span><span>插入</span><span>页面</span><span>引用</span><span>审阅</span><span>视图</span><span class="on">表格工具</span><span>表格样式</span><span>WPS AI</span>
+    </div>
+    <div class="ribbon">
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 4v16"/></svg>表格属性</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M14 20l6-6-2-2-6 6v2z"/></svg>绘制表格</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 10l6 6M15 10l-6 6"/></svg>删除</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 9v6M9 12h6"/></svg>插入</span>
+      <span class="sep" aria-hidden="true"></span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M7 12h10M14 9l3 3-3 3M10 9l-3 3 3 3"/></svg>合并单元格</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M10 4v16M16 14l2 2 3-4"/></svg>AI 美化表格</span>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="aibtn-wrap">
+        <button class="aibtn" id="aibtn" aria-expanded="false" aria-describedby="tip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="14" height="14" rx="1.5"/><path d="M3 10h14M8 5v14"/><path d="M19 2.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" fill="currentColor" stroke="none"/></svg>
+          <span>AI 填写<span class="beta">Beta</span></span>
+        </button>
+        <div class="tip" role="tooltip" id="tip"></div>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 5h12M6 5l6 7-6 7h12"/></svg>公式</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 7h14M5 12h14M5 17h9"/></svg>转为文本</span>
+      <span class="rb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 4v16M4 16l4 4 4-4M14 6h6M14 11h4M14 16h2"/></svg>排序</span>
+    </div>
+    <div class="docbg"><article class="page" id="page"></article></div>
+  </main>
+
+  <aside class="notes" id="notes" aria-label="当前场景的设计说明"></aside>
+</div>
+<input type="file" id="filein" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv">
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C = (t, k, cs) => ({t: t || '', k: k || 'd', cs: cs || 1});
+const H = a => a.map(t => C(t, 'h'));
+const D = a => a.map(t => C(t, 'd'));
+const E = n => Array.from({length: n}, () => C('', 'd'));
+const clone = g => g.map(r => r.map(c => Object.assign({}, c)));
+const SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9z" fill="currentColor"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" fill="currentColor"/></svg>';
+const XS = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const I_OPT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5 4 20z"/><path d="M13.5 7l3 3"/><path d="M18.5 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" fill="currentColor" stroke="none"/></svg>';
+const I_ADD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+const I_SEND = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.5 4.2l17 7.3c.4.2.4.8 0 1l-17 7.3c-.4.2-.9-.2-.7-.7L5.3 12 2.8 4.9c-.2-.5.3-.9.7-.7z"/><path d="M5.3 12h7" stroke="#fff" stroke-width="1.4" opacity=".55"/></svg>';
+const I_STOP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>';
+const I_FILE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>';
+const GENERIC = '请帮我填写这份表格';
+const money = n => n.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const toNum = s => { const v = parseFloat(String(s).replace(/[,，\s]/g, '')); return isNaN(v) ? null : v; };
+
+/* ---------- 通用工具 ---------- */
+const NAMES = ['周宁','吴凡','郑悦','孙浩','冯琳','何川','许诺','曹阳'];
+const DEPTS = ['市场部','技术部','财务部','人事部','运营部'];
+function sampleVal(h, i){
+  if (/序号|编号/.test(h)) return String(i + 1);
+  if (/姓名|值班人|负责人/.test(h)) return NAMES[i % 8];
+  if (/部门/.test(h)) return DEPTS[i % 5];
+  if (/星期/.test(h)) return ['周一','周二','周三','周四','周五','周六','周日'][i % 7];
+  if (/日期|时间/.test(h)) return '11月' + (10 + i) + '日';
+  if (/手机|电话/.test(h)) return '138 0000 ' + String(1001 + i * 37).slice(-4);
+  if (/邮箱/.test(h)) return 'user' + String(i + 1).padStart(2, '0') + '@example.com';
+  if (/单价|金额/.test(h)) return String([19.9, 29, 45.5, 8.8, 12][i % 5]);
+  if (/数量/.test(h)) return String([12, 30, 8, 50, 24][i % 5]);
+  if (/状态/.test(h)) return ['未开始','进行中','已完成'][i % 3];
+  if (/备注/.test(h)) return '—';
+  return '示例' + h + (i + 1);
+}
+const headersOf = g => g[0].map(c => c.k === 'h' ? c.t : '');
+const isEmptyRow = r => r.every(c => c.t === '');
+const dataIdx = g => g.map((r, i) => i).filter(i => g[i][0].k !== 'h');
+const emptyCount = g => dataIdx(g).filter(i => isEmptyRow(g[i])).length;
+function parsePaste(text, ncols){
+  return String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean).map(line => {
+    let tk = line.split(/[\s,，、;；|\/\t]+/).filter(Boolean);
+    if (tk.length > ncols) tk = tk.slice(0, ncols - 1).concat(tk.slice(ncols - 1).join(' '));
+    return tk;
+  });
+}
+function listFill(grid, rows, opt){
+  opt = opt || {};
+  const g = clone(grid), ncols = g[0].length, idx = dataIdx(g).filter(i => isEmptyRow(g[i]));
+  let i = 0, added = 0;
+  for (const r of idx){
+    if (i >= rows.length) break;
+    g[r] = g[r].map((c, ci) => Object.assign({}, c, {t: rows[i][ci] != null ? rows[i][ci] : '', p: true, src: opt.src ? opt.src[i] : undefined}));
+    i++;
+  }
+  while (i < rows.length){
+    g.push(Array.from({length: ncols}, (_, ci) => ({t: rows[i][ci] || '', k: 'd', cs: 1, p: true, src: opt.src ? opt.src[i] : undefined})));
+    i++; added++;
+  }
+  return {grid: g, added};
+}
+const sampleRows = (g, n) => Array.from({length: n}, (_, i) => headersOf(g).map(h => sampleVal(h, i)));
+const CN = '零一二三四五六七八九';
+function cnNum(n){ if (n <= 10) return n === 10 ? '十' : CN[n]; if (n < 20) return '十' + CN[n - 10]; const t = Math.floor(n / 10), u = n % 10; return CN[t] + '十' + (u ? CN[u] : ''); }
+function fmtSeq(f, n){
+  switch (f){
+    case '01': return String(n).padStart(2, '0');
+    case '1.': return n + '.';
+    case '(1)': return '(' + n + ')';
+    case '一、': return cnNum(n) + '、';
+    case '001': return String(n).padStart(3, '0');
+    default: return String(n);
+  }
+}
+const colCells = (g, c) => dataIdx(g).map(r => [r, c]);
+const setOf = cells => new Set(cells.map(x => x[0] + ',' + x[1]));
+function selCells(st){
+  if (!st.sel) return [];
+  const {r0, c0, r1, c1} = st.sel, out = [];
+  for (let r = Math.min(r0, r1); r <= Math.max(r0, r1); r++){
+    const row = st.grid[r]; if (!row) continue;
+    for (let c = Math.min(c0, c1); c <= Math.max(c0, c1); c++){ if (row[c] && row[c].k !== 'h' && row[c].k !== 'l') out.push([r, c]); }
+  }
+  return out;
+}
+function selDesc(cells){
+  const rs = cells.map(x => x[0]), cs = [...new Set(cells.map(x => x[1]))];
+  return (cs.length === 1 ? '第 ' + (cs[0] + 1) + ' 列' : '第 ' + (Math.min(...cs) + 1) + '–' + (Math.max(...cs) + 1) + ' 列') + ' · ' + cells.length + ' 格';
+}
+function restrict(res, orig, set){
+  const g = orig.map((r, ri) => r.map((c, ci) => set.has(ri + ',' + ci) && res.grid[ri] && res.grid[ri][ci] ? res.grid[ri][ci] : Object.assign({}, c)));
+  return Object.assign({}, res, {grid: g});
+}
+function renumber(g, fmt, start, c){
+  let n = start;
+  dataIdx(g).forEach(r => { const v = fmtSeq(fmt, n++); if (g[r][c].t !== v) g[r][c] = Object.assign({}, g[r][c], {t: v, p: true}); });
+}
+function seqIssues(g, c){
+  const vals = dataIdx(g).map(r => g[r][c].t.trim());
+  const blank = vals.filter(v => v === '').length;
+  const nums = vals.filter(v => v !== '').map(v => parseInt(v, 10));
+  let dup = 0, jump = 0;
+  for (let i = 1; i < nums.length; i++){ if (nums[i] === nums[i - 1]) dup++; else if (nums[i] - nums[i - 1] > 1) jump++; }
+  return {blank, dup, jump, total: blank + dup + jump};
+}
+function dupRows(g){
+  const seen = new Set(), dups = [];
+  dataIdx(g).forEach(r => { const rest = g[r].slice(1); if (rest.every(c => c.t.trim() === '')) return; const key = rest.map(c => c.t).join('|'); if (seen.has(key)) dups.push(r); else seen.add(key); });
+  return dups;
+}
+
+/* ---------- 示例小票 ---------- */
+const RECEIPT_ROWS = [['A4 打印纸','5 包','24.00','120.00'],['中性笔（黑）','2 盒','18.50','37.00'],['文件夹','10 个','3.50','35.00'],['便利贴','6 本','4.20','25.20'],['订书钉','3 盒','2.80','8.40']];
+const RECEIPT = (() => {
+  let y = 92, rows = '';
+  RECEIPT_ROWS.forEach(r => { rows += '<text x="16" y="' + y + '">' + r[0] + '</text><text x="138" y="' + y + '">' + r[1] + '</text><text x="190" y="' + y + '">' + r[2] + '</text><text x="244" y="' + y + '" text-anchor="end">' + r[3] + '</text>'; y += 26; });
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="270" viewBox="0 0 260 270" font-family="sans-serif" font-size="12" fill="#333"><rect width="260" height="270" fill="#FFFDF7"/><text x="130" y="30" font-size="14" text-anchor="middle" font-weight="bold">示例文具店 · 销售小票</text><text x="130" y="48" font-size="10" text-anchor="middle" fill="#888">2026-11-03 14:26　单号 0000318</text><line x1="12" y1="58" x2="248" y2="58" stroke="#999" stroke-dasharray="3 3"/><g fill="#888" font-size="11"><text x="16" y="74">品名</text><text x="138" y="74">数量</text><text x="190" y="74">单价</text><text x="244" y="74" text-anchor="end">金额</text></g>' + rows + '<line x1="12" y1="' + (y - 10) + '" x2="248" y2="' + (y - 10) + '" stroke="#999" stroke-dasharray="3 3"/><text x="16" y="' + (y + 10) + '" font-weight="bold">合计</text><text x="244" y="' + (y + 10) + '" text-anchor="end" font-weight="bold">225.60</text></svg>';
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+})();
+
+/* ---------- 空表模板 ---------- */
+const num = (n, cols) => Array.from({length: n}, (_, i) => [String(i + 1)].concat(Array(cols - 1).fill('')));
+const TPL = {
+  sign:  {name:'会议签到表', kw:/签到|例会|会议/, build: () => [H(['序号','姓名','部门','签到时间','签名'])].concat(num(8, 5).map(D))},
+  leave: {name:'请假申请表', kw:/请假/, build: () => [
+            [C('申请人','l'), C('','v'), C('部门','l'), C('','v')],
+            [C('请假类型','l'), C('□ 事假　□ 病假　□ 年假　□ 其他','v',3)],
+            [C('开始时间','l'), C('','v'), C('结束时间','l'), C('','v')],
+            [C('请假事由','l'), C('','v',3)],
+            [C('审批意见','l'), C('','v',3)]]},
+  duty:  {name:'值班安排表', kw:/值班|排班/, build: () => [H(['日期','星期','值班人','联系电话','备注'])].concat(['周一','周二','周三','周四','周五','周六','周日'].map((w, i) => D(['11月' + (10 + i) + '日', w, '', '', ''])))},
+  goods: {name:'物品清单', kw:/物品|清单|采购/, build: () => [H(['序号','物品名称','数量','单位','备注'])].concat(num(6, 5).map(D))},
+  sign2: {name:'活动报名表', kw:/报名|活动|团建/, build: () => [H(['序号','姓名','部门','手机号','报名项目'])].concat(num(6, 5).map(D))},
+  lesson:{name:'教案', kw:/教案|备课/, build: () => [
+            [C('课题','l'), C('','v'), C('课时','l'), C('','v')],
+            [C('教学目标','l'), C('','v',3)], [C('教学重难点','l'), C('','v',3)], [C('教学过程','l'), C('','v',3)], [C('教学反思','l'), C('','v',3)]]}
+};
+const tplGrid = key => TPL[key].build().map(r => r.map(c => Object.assign({}, c, {p: true})));
+
+/* ---------- 教案内容（预置）[标准, 换一版, 简要, 详细补充] ---------- */
+const LESSON = {
+  '教学目标': ['1. 正确、流利、有感情地朗读课文，积累"酝酿""呼朋引伴"等词语。2. 理清"盼春—绘春—赞春"的行文思路。3. 体会作者对春天的喜爱与赞美之情。',
+              '1. 通过反复朗读，读出春天的生机与情感变化。2. 学习抓住景物特点、调动多种感官描写景物的方法。3. 激发热爱自然、积极向上的情感。',
+              '读准字词、理清结构，体会作者对春天的赞美。', '4. 能仿照课文写法，用 150 字左右描写一处春景。'],
+  '教学重难点': ['重点：品味五幅春景图中生动形象的语言。难点：理解比喻、拟人等修辞手法的表达效果。',
+              '重点：把握"盼春、绘春、赞春"的结构。难点：体会多感官描写带来的画面感。',
+              '重点：品味语言；难点：理解修辞效果。', '突破方法：以朗读带动品析，小组合作找出修辞句并说说好在哪里。'],
+  '教学过程': ['一、导入（3 分钟）：展示春景图片，请学生说说印象中的春天。二、初读（10 分钟）：自由朗读，划分"盼春、绘春、赞春"三部分。三、精读（20 分钟）：小组赏析春草图、春花图，找出修辞并说说效果。四、小结（7 分钟）：齐读结尾三段，体会赞美之情。五、作业：仿写一段家乡的春景。',
+              '一、情境导入：播放春天的声音片段，请学生猜季节。二、整体感知：默读课文，用一个词概括每幅春景。三、合作探究：分组朗读并赏析一幅春景图，派代表分享。四、拓展迁移：对比两首写春的古诗，说说异同。五、布置作业。',
+              '导入 → 初读分层 → 精读赏析 → 小结 → 仿写作业。', '课堂评价：用"朗读星级"和"赏析卡"记录每组表现，课后反馈。'],
+  '板书设计': ['春　盼春 → 绘春（春草 · 春花 · 春风 · 春雨 · 迎春）→ 赞春　｜　修辞：比喻 · 拟人 · 排比',
+              '春：新 · 美 · 力　｜　五幅图：草 · 花 · 风 · 雨 · 人', '盼春 → 绘春 → 赞春', ''],
+  '教学反思': ['学生对"春花图"的赏析参与度高，但对"春风图"中多感官描写的体会不够深入。下节课可增加闭眼听读环节，引导学生从听觉、嗅觉、触觉多角度感受。',
+              '朗读环节时间偏长，导致精读部分略显仓促。下次可把初读改为课前预习，课堂集中做赏析与仿写。',
+              '赏析环节参与度高；多感官描写的理解还需加强。', '另外，仿写作业中有三分之一的学生只罗列景物，需补充"抓特点"的写作指导。']
+};
+function lessonRun(st, len, onlySet, topic){
+  const g = clone(st.grid);
+  g.forEach((r, ri) => r.forEach((c, ci) => {
+    if (c.k !== 'v' || c.t !== '') return;
+    if (onlySet && !onlySet.has(ri + ',' + ci)) return;
+    const v = LESSON[r[ci - 1] && r[ci - 1].t]; if (!v) return;
+    let t = len === '简要' ? v[2] : v[0];
+    if (len === '详细' && v[3]) t = v[0] + v[3];
+    c.t = t; c.p = true; c.alts = [t, v[1]]; c.ai = 0;
+  }));
+  const notes = ['AI 撰写的成品内容（篇幅：' + len + '），每一栏都可以单独「换一版」'];
+  if (topic && !/春/.test(topic)) notes.push('演示中撰写内容为预置（《春》），真实产品会按你写的课题生成');
+  return {grid: g, notes};
+}
+
+/* ---------- 场景 ---------- */
+const SC = {
+  empty: {
+    label:'空表：直接问也不反问', doc:'部门例会准备', noSel:true,
+    body:'<h3>部门例会准备</h3><p>下周一部门例会，需要准备一张表，会上请大家签到。</p>',
+    grid: () => Array.from({length: 4}, () => E(5)),
+    chips: () => [GENERIC, '做一张会议签到表', '做一张请假申请表', '做一张部门季度团建报名表'],
+    opt: () => '根据正文中的「例会」「签到」，生成一张会议签到表：列为序号、姓名、部门、签到时间、签名，预留 8 行，序号从 1 开始',
+    tail: '请生成表头，并按用途调整行列数',
+    inline: () => '<button data-act="open">' + SPARK + '这张表做什么用？让 AI 生成</button>',
+    tip:'空表也能用：说出用途，AI 生成表头和结构',
+    notes:{scene:'泛化填表（最常见）', pain:'只说"请帮我填写这份表格"；空表时模型现在会反问',
+      pts:[['点「猜你想要」里的"帮我填写这份表格"', '不会反问：按正文的"例会""签到"推断为会议签到表'],
+           ['先在输入框写"团建"，再点「优化提示词」', '模糊的需求被补成带列名、行数的具体要求'],
+           ['「猜你想要」是 6 个固定入口，每个场景都一样', '点下去按当前表格判断具体做什么；做不了时会说明原因，不会硬做']]}
+  },
+  partial: {
+    label:'按上面的格式补全', doc:'11月第2周值班安排',
+    body:'<h3>11月第2周值班安排</h3><p>本周值班顺序：<span class="src" id="m-rot">张伟、李娜、王磊、赵敏、陈晨、刘洋</span>。<span class="src" id="m-wk">周末值班需保持手机畅通</span>，如需换班请提前一天告知行政。</p>',
+    grid: () => [H(['日期','星期','值班人','备注']), D(['11月10日','周一','张伟','—']), D(['11月11日','周二','李娜','—'])].concat(Array.from({length: 4}, () => E(4))),
+    docRows:[['11月12日','周三','王磊','—'],['11月13日','周四','赵敏','—'],['11月14日','周五','陈晨','—'],['11月15日','周六','刘洋','周末值班，保持手机畅通']], docSrc:['rot','rot','rot','wk'],
+    chips: () => ['按上面的格式补全剩下的行', '和上面一样', '生成示例数据'],
+    opt: st => '按前 2 行的格式补全剩下 ' + emptyCount(st.grid) + ' 行：日期逐日递增、星期对应，值班人按正文中的值班顺序排，周六备注周末值班要求',
+    tail: '沿用上面已填行的格式，只填空白行',
+    inlineRow: true,
+    tip:'按已有格式补全剩下的行',
+    notes:{scene:'泛化填表（最常见）', pain:'典型说法："和之前一样""按上面的格式"',
+      pts:[['空行里直接出现"按上面格式补全"', '不打开对话框也能一步生成预览'],
+           ['框选几格后提问，就只填这几格', '选区会以标签的形式出现在输入框里，可以一键移除'],
+           ['预览中悬停某一行，可看到依据的原文', '续写有出处，不是凭空编的']]}
+  },
+  seqfix: {
+    label:'插了几行，序号乱了', doc:'项目成员名单', seqCol: 0,
+    body:'<h3>项目成员名单</h3><p>第二轮新增了 2 位成员，插在了表格中间。</p>',
+    grid: () => [H(['序号','姓名','部门','职责']),
+      D(['1','张伟','市场部','项目负责人']), D(['2','李娜','技术部','前端开发']), D(['','周宁','技术部','后端开发']),
+      D(['3','王磊','财务部','预算管理']), D(['','吴凡','运营部','用户调研']), D(['4','赵敏','人事部','人员协调']),
+      D(['4','陈晨','市场部','品牌宣传']), D(['6','刘洋','技术部','测试'])],
+    chips: () => ['重新排列序号', '从 1 开始向下顺延，格式 01', '按部门排序后重新编号'],
+    opt: st => '将「序号」列从 1 开始重新连续编号，共 ' + dataIdx(st.grid).length + ' 行，沿用「1」的格式，其他列内容不动',
+    tail: '只改「序号」列，其他列内容不动',
+    inline: st => { const s = seqIssues(st.grid, 0); return s.total ? '<button data-act="quick">' + SPARK + '序号不连续（' + s.total + ' 处）· 一键重排</button>' : ''; },
+    tip:'序号断了、重复了，一键重排',
+    notes:{scene:'序号与编号（最高频的单项操作）', pain:'典型 query：重新排列、补齐序号、向下顺延',
+      pts:[['序号是确定性操作：提问后立即完成，不走预览', '写入后在输入框下方可撤销；右侧步骤条会划掉"生成中""预览"'],
+           ['格式、起始值直接写在需求里', '试试"从 5 开始编号，格式 01"或"格式 一、"'],
+           ['表格上方就近提示"序号不连续"', '不用打开对话框，一步完成']]}
+  },
+  seqsel: {
+    label:'选中一列来编号', doc:'读书会报名名单', seqCol: 0, seqFmt:'001',
+    body:'<h3>第三届读书会报名名单</h3><p>编号格式按往届惯例，从 001 开始。</p>',
+    grid: () => [H(['编号','姓名','学院','联系电话']),
+      D(['','周宁','文学院','138 0000 1201']), D(['','吴凡','理学院','138 0000 1202']), D(['','郑悦','法学院','138 0000 1203']), D(['','孙浩','商学院','138 0000 1204']),
+      D(['','冯琳','文学院','138 0000 1205']), D(['','何川','工学院','138 0000 1206']), D(['','许诺','理学院','138 0000 1207']), D(['','曹阳','医学院','138 0000 1208'])],
+    chips: st => selCells(st).length ? ['为选中的 ' + selCells(st).length + ' 格从 001 开始编号', '选中的区域从 1 开始编号'] : ['为「编号」列从 001 开始编号', '从 1 开始编号'],
+    opt: st => selCells(st).length ? '为选中的 ' + selCells(st).length + ' 个单元格从 001 开始填充编号，向下递增' : '为「编号」列从 001 开始填充编号，共 8 行，格式按正文要求为「001」',
+    tail: '格式按正文要求为「001」',
+    inline: st => st.sel ? '' : '<button class="plain" data-act="selcol">模拟框选「编号」列</button>',
+    tip:'选中一列，一键填充编号',
+    notes:{scene:'序号与编号', pain:'典型 query："选中的区域""从 1 开始编号"',
+      pts:[['在表格上拖动框选，选区会变成输入框里的标签', '也可以点表格上方的"模拟框选「编号」列"'],
+           ['有选区时，点「序号/编号」只作用于选区', '"选中的区域"是真实 query 里的高频说法'],
+           ['「优化提示词」会读取正文里的格式要求', '"按往届惯例从 001 开始"会被写进提示词']]}
+  },
+  lesson: {
+    label:'教案：根据课题撰写', doc:'七年级语文教案', lesson:true,
+    body:'<h3>七年级语文教案</h3><p class="muted">授课教师：＿＿＿　　授课班级：七年级（3）班</p>',
+    grid: () => [
+      [C('课题','l'), C('《春》（朱自清）第一课时','v'), C('课时','l'), C('1 课时','v')],
+      [C('教学目标','l'), C('','v',3)], [C('教学重难点','l'), C('','v',3)], [C('教学过程','l'), C('','v',3)],
+      [C('板书设计','l'), C('','v',3)], [C('教学反思','l'), C('','v',3)]],
+    chips: st => selCells(st).length ? ['只撰写选中的栏目'] : ['生成教案各栏内容', '帮我写教学反思', '写得简要一些'],
+    opt: () => '根据课题《春》（朱自清）第一课时，为七年级学生撰写教案各栏内容：教学目标、教学重难点、教学过程、板书设计、教学反思，篇幅标准，语言简洁可直接使用',
+    tail: '课题为《春》（朱自清）第一课时，面向七年级，篇幅标准，可直接使用',
+    tip:'根据课题撰写教案、反思、评价等内容',
+    notes:{scene:'具体内容 · 内容撰写', pain:'典型 query：生成教案、反思、评价、项目材料、维护记录',
+      pts:[['撰写结果是成品，不标"示例"', '和"示例数据"彻底分开，不劝退老师'],
+           ['课题、篇幅都可以写在需求里', '只写"生成教案"再点「优化提示词」，会补上课题、年级、栏目和篇幅'],
+           ['预览中每一栏可单独「换一版」', '内容质量参差，用户往往只想重写其中一两栏']]}
+  },
+  extract: {
+    label:'从会议纪要提取待办', doc:'产品周会纪要',
+    body:'<h3>11月4日 产品周会纪要</h3><p>参会人：张伟、李娜、王磊、赵敏。</p>' +
+      '<p>一、AI 填写改版：确认对话框改为简约样式。<span class="src" id="m-a">王磊负责在 11月8日前输出对话框交互稿</span>；<span class="src" id="m-b">李娜需在 11月12日前完成提示词优化的规则</span>。</p>' +
+      '<p>二、数据：<span class="src" id="m-c">赵敏本周五（11月7日）前完成 query 二次分类</span>，目前已完成一半。</p>' +
+      '<p>三、其他：<span class="src" id="m-d">张伟跟进图片识别的接口评估，下周三（11月12日）前给结论</span>。</p><h4>待办事项</h4>',
+    grid: () => [H(['待办事项','负责人','截止日期','状态'])].concat(Array.from({length: 4}, () => E(4))),
+    docRows:[['输出对话框交互稿','王磊','11月8日','未开始'],['完成提示词优化规则','李娜','11月12日','未开始'],['完成 query 二次分类','赵敏','11月7日','进行中（已完成一半）'],['评估图片识别接口','张伟','11月12日','未开始']], docSrc:['a','b','c','d'],
+    chips: () => [GENERIC, '从会议纪要中提取待办'],
+    opt: () => '从正文会议纪要（第 2–4 段）中提取所有待办事项，按「待办事项、负责人、截止日期、状态」填入表格，状态根据原文推断',
+    tail: '内容来自正文会议纪要，状态根据原文推断',
+    tip:'从本文档内容中提取信息填入表格',
+    notes:{scene:'具体内容 · 从已有文字中提取迁移', pain:'怕漏填、怕编造，填错了很难核对',
+      pts:[['不用上传：AI 默认读取本文档正文', '素材常在同一份文档里'],
+           ['预览中悬停任意一行，正文里对应的句子会高亮', '逐条核对只要扫一眼']]}
+  },
+  paste: {
+    label:'粘贴名单拆进表格', doc:'部门通讯录',
+    body:'<h3>部门通讯录</h3><p>以下为本部门成员联系方式，仅限内部使用。</p>',
+    grid: () => [H(['姓名','部门','手机号','邮箱'])].concat(Array.from({length: 4}, () => E(4))),
+    paste:'张伟 市场部 13800002041 zhangwei@example.com\n李娜，技术部，13900005678，lina@example.com\n王磊 / 财务部 / 13700002222 / wanglei@example.com\n赵敏 人事部 13600001234 zhaomin@example.com\n陈晨 运营部 13600008899 chenchen@example.com',
+    chips: () => [{label:'把这份名单拆分填入（含示例名单）', text: '把以下名单拆分填入表格：\n' + SC.paste.paste}],
+    opt: (st, data) => '把以下名单按「姓名、部门、手机号、邮箱」拆分填入表格，每行一人，行数不够时自动加行：' + (data ? '\n' + data : ''),
+    tail: '按「姓名、部门、手机号、邮箱」拆分，每行一人',
+    tip:'把粘贴的名单或文件内容，按表头拆分填入',
+    notes:{scene:'具体内容 · 信息迁移；其他 · 直接粘贴数据', pain:'搬运：逐行抄写，还要拆分行列',
+      pts:[['名单直接粘贴进输入框：第一行写要求，下面是数据', '拆分是真实计算，改一行、加一行再发送试试'],
+           ['点「补全内容」，输入框里会放好开头，粘贴名单即可发送', '也可以点「+」上传 txt / csv；行数超出时自动加行']]}
+  },
+  image: {
+    label:'照着图片或文件填表', doc:'办公用品采购清单', needFile:true,
+    body:'<h3>办公用品采购清单</h3><p>请根据采购小票整理，月底提交财务。</p>',
+    grid: () => [H(['序号','物品名称','数量','单价（元）','金额（元）'])].concat(Array.from({length: 5}, () => E(5))),
+    fileRows: RECEIPT_ROWS.map((r, i) => [String(i + 1)].concat(r)),
+    chips: () => [{label:'用示例小票图片填写', text:'根据上传的小票图片填写采购清单', file:true}, '根据图片填表'],
+    opt: () => '识别上传的图片或文件，按「序号、物品名称、数量、单价、金额」填入采购清单，金额保留 2 位小数',
+    tail: '按表头逐项填入，金额保留 2 位小数',
+    tip:'根据参考文件或图片填表',
+    notes:{scene:'具体内容 · 根据参考文件或图片填表', pain:'典型 query：根据参考文件或图片填表',
+      pts:[['点「+」上传，或直接在输入框里粘贴截图', '附件以缩略图标签出现在输入框里，最多 3 个'],
+           ['没有附件就点「补全内容」，会提示先上传，并可一键用示例小票', '不会拿空内容去编造'],
+           ['预览中悬停某一行，可看到它来自图片第几行', '回应"填错了很难核对"']]}
+  },
+  calc: {
+    label:'算合计、补占比', doc:'11月部门费用汇总', calc:true,
+    body:'<h3>11月部门费用汇总</h3><p>以下金额均为含税金额。</p>',
+    grid: () => [H(['序号','费用项目','金额（元）','占比']),
+      D(['1','差旅','3,280.00','']), D(['2','办公用品','225.60','']), D(['3','招待','1,150.00','']), D(['4','培训','2,400.00','']), D(['5','通讯','360.00','']), D(['','合计','',''])],
+    chips: () => ['计算合计，并补全占比', '只计算合计', '表头加粗居中'],
+    opt: () => '计算「金额」列 5 项的合计，填入合计行，并按「金额 ÷ 合计」补全占比列，保留 1 位小数',
+    tail: '数值保留 2 位小数，占比保留 1 位小数',
+    inline: st => st.grid[st.grid.length - 1][2].t ? '' : '<button data-act="quick">' + SPARK + '「合计」行还没算 · 一键计算</button>',
+    tip:'识别数字列，计算合计、平均、占比',
+    notes:{scene:'计算与数值', pain:'典型 query：求和、合计、平均值、小数位处理',
+      pts:[['计算是确定性操作：立即完成，并写明算法', '"合计 = 5 项求和"让结果可核对'],
+           ['在输入框输入"表头加粗居中"试试', '排版需求会引导到「AI 美化表格」，不会失败']]}
+  },
+  full: {
+    label:'表格已填满：改、查、排', doc:'员工信息表', seqCol: 0,
+    body:'<h3>员工信息表</h3><p>数据来自各部门提交，可能有重复。</p>',
+    grid: () => [H(['序号','姓名','部门','入职日期']),
+      D(['1','张伟','市场部','2024-03-01']), D(['2','李娜','技术部','2025-07-15']), D(['3','王磊','财务部','2023-11-08']),
+      D(['4','李娜','技术部','2025-07-15']), D(['5','赵敏','人事部','2022-06-30']), D(['6','陈晨','市场部','2024-09-02'])],
+    chips: () => ['删除重复行', '按入职日期排序', '把「市场部」改为「品牌部」', '表头加粗居中'],
+    opt: () => '找出表格中的重复行并删除（保留第一次出现的），然后从 1 开始重排序号',
+    tail: '保留第一次出现的记录，完成后重排序号',
+    inline: st => dupRows(st.grid).length ? '<button data-act="open">' + SPARK + '发现 ' + dupRows(st.grid).length + ' 行重复 · 让 AI 处理</button>' : '',
+    tip:'查重、排序、批量修改',
+    notes:{scene:'修改、排版及其他', pain:'典型 query：修改替换、删除、排序、查重、调整格式',
+      pts:[['「删除重复行」直接执行；没有重复时会明确告诉你', '点「补全内容」会说明表格已填满，并给出可以做的事'],
+           ['"把 A 改为 B"直接执行，可撤销', ''],
+           ['排版需求引导到「AI 美化表格」', '不在这里失败，也不硬做'],
+           ['还没想清楚？点「探索一下」', '在对话框下方展开 6 张说明卡，每张都能「在这张表上试试」，说明直接变成第一次使用']]}
+  }
+};
+const ORDER = [
+  ['泛化填表', '最常见', ['empty','partial']],
+  ['序号与编号', '高频', ['seqfix','seqsel']],
+  ['具体内容填写与生成', '高频', ['lesson','extract','paste','image']],
+  ['计算与数值', '常见', ['calc']],
+  ['修改、排版及其他', '长尾', ['full']]
+];
+const FMT_RE = /加粗|字体|字号|颜色|居中|对齐|行高|列宽|边框|底纹|美化|样式/;
+const REP_RE = /^把?[「"“]?(.+?)[」"”]?(?:都|全部)?(?:改为|改成|替换为|替换成|换成)[「"“]?(.+?)[」"”]?$/;
+
+/* ---------- 状态 ---------- */
+const S = {};
+function init(id){
+  S[id] = {grid: SC[id].grid(), open: false, phase: 'idle', text: '', files: [], sel: null, err: '', route: null, routeMsg: '',
+    optPrev: null, optBusy: false, info: null, ex: null, preview: null, snapshot: null, shown: 0, total: 0, timer: null, flash: false, applied: null, last: null, note: ''};
+}
+Object.keys(SC).forEach(init);
+let cur = 'empty', drag = false;
+try { const h = location.hash.slice(1); if (SC[h]) cur = h; } catch(e){}
+
+/* ---------- 理解需求 → 执行计划 ---------- */
+function parseFmt(t){ if (/001/.test(t)) return '001'; if (/(^|[^0-9])01([^0-9]|$)/.test(t)) return '01'; if (/一、/.test(t)) return '一、'; if (/\(1\)|（1）/.test(t)) return '(1)'; if (/1\./.test(t)) return '1.'; return null; }
+function plan(text){
+  const sc = SC[cur], st = S[cur], g = st.grid, t = text.trim();
+  const cells = selCells(st), selSet = setOf(cells);
+  if (!t) return {err: '先输入需求，或点下方的场景提问'};
+  if (FMT_RE.test(t) && !/序号|编号|合计|填/.test(t)) return {route: t};
+  const m = t.match(REP_RE);
+  if (m){
+    const from = m[1].trim(), to = m[2].trim(); let hits = 0;
+    g.forEach(r => r.forEach(c => { if (c.k !== 'h' && c.k !== 'l' && c.t.includes(from)) hits++; }));
+    if (!hits) return {err: '表格里没有找到「' + from + '」'};
+    return {instant: true, run: () => { const ng = clone(g); ng.forEach(r => r.forEach(c => { if (c.k !== 'h' && c.k !== 'l' && c.t.includes(from)){ c.t = c.t.split(from).join(to); c.p = true; } })); return {grid: ng, msg: '已把 ' + hits + ' 处「' + from + '」改为「' + to + '」'}; }};
+  }
+  if (/重复|查重|去重/.test(t) && dupRows(g).length){
+    return {instant: true, run: () => { const del = new Set(dupRows(g)); const ng = clone(g).filter((_, i) => !del.has(i)); renumber(ng, '1', 1, 0); return {grid: ng, msg: '已删除 ' + del.size + ' 行重复，并重排序号'}; }};
+  }
+  if (/排序/.test(t) && (cur === 'full' || cur === 'seqfix')){
+    const col = cur === 'full' ? 3 : 2, label = cur === 'full' ? '入职日期' : '部门';
+    return {instant: true, run: () => { const rows = dataIdx(g).map(r => g[r].map(c => Object.assign({}, c, {p: true}))); rows.sort((a, b) => a[col].t.localeCompare(b[col].t, 'zh-Hans-CN')); const ng = [clone(g)[0]].concat(rows); let k = 1; dataIdx(ng).forEach(r => { ng[r][0].t = String(k++); }); return {grid: ng, msg: '已按' + label + '排序，并重排序号'}; }};
+  }
+  if (/序号|编号|顺延|重排|重新排列/.test(t) && !/填入|识别|提取|撰写|图片|文件/.test(t) && !sc.noSel && (sc.seqCol != null || (cells.length && new Set(cells.map(x => x[1])).size === 1))){
+    const target = cells.length ? cells : colCells(g, sc.seqCol);
+    const f0 = g[target[0][0]][target[0][1]].t;
+    const fmt = parseFmt(t) || (f0 && /^0\d$/.test(f0) ? '01' : '1');
+    const sm = t.match(/从\s*0*(\d+)\s*开始/); const start = sm ? parseInt(sm[1], 10) : 1;
+    return {instant: true, run: () => { const ng = clone(g); let n = start; target.forEach(([r, c]) => { const v = fmtSeq(fmt, n++); if (ng[r][c].t !== v) ng[r][c] = Object.assign({}, ng[r][c], {t: v, p: true}); }); return {grid: ng, msg: '已填充 ' + target.length + ' 个序号（' + fmtSeq(fmt, start) + ' 至 ' + fmtSeq(fmt, start + target.length - 1) + '）'}; }};
+  }
+  if (/合计|求和|总计|占比|平均/.test(t) && sc.calc){
+    const ratio = !/只/.test(t);
+    return {instant: true, run: () => {
+      const ng = clone(g), last = ng.length - 1, rows = dataIdx(ng).filter(r => r !== last);
+      const sum = rows.reduce((s, r) => s + (toNum(ng[r][2].t) || 0), 0);
+      const set = (r, c, v) => { if (ng[r][c].t !== v) ng[r][c] = Object.assign({}, ng[r][c], {t: v, p: true}); };
+      set(last, 2, money(sum));
+      if (ratio){ rows.forEach(r => set(r, 3, ((toNum(ng[r][2].t) || 0) / sum * 100).toFixed(1) + '%')); set(last, 3, '100%'); }
+      return {grid: ng, msg: '合计 ' + money(sum) + ' 元 = ' + rows.length + ' 项金额求和' + (ratio ? '；占比 = 金额 ÷ 合计，保留 1 位小数' : '')};
+    }};
+  }
+  const generic = t === GENERIC;
+  const pre = generic ? '泛化请求：已按当前表格直接执行，没有反问' : '';
+  if (sc.lesson){
+    const len = /简要|简短|简洁一些|简单/.test(t) ? '简要' : /详细/.test(t) ? '详细' : '标准';
+    const tm = t.match(/《[^》]+》[^，。,]*/); const topic = tm ? tm[0] : '';
+    let only = cells.length ? selSet : null;
+    if (!only && /反思/.test(t) && !/各栏|教案/.test(t)){ only = new Set(); g.forEach((r, ri) => r.forEach((c, ci) => { if (c.k === 'v' && r[ci - 1] && r[ci - 1].t === '教学反思') only.add(ri + ',' + ci); })); }
+    return {run: () => { const res = lessonRun(st, len, only, topic); if (pre) res.notes.unshift(pre); return res; }};
+  }
+  if (sc.noSel){
+    let key = Object.keys(TPL).find(k => TPL[k].kw.test(t));
+    if (!key && generic) key = 'sign';
+    return {run: () => {
+      const ng = key ? tplGrid(key) : [H(['序号','事项','负责人','截止日期','状态'])].concat(num(6, 5).map(D)).map(r => r.map(c => Object.assign({}, c, {p: true})));
+      const cols = ng[0].reduce((s, c) => s + c.cs, 0);
+      const notes = [(key ? '「' + TPL[key].name + '」' : '按你的描述生成') + '：表格将从 5 列 × 4 行调整为 ' + cols + ' 列 × ' + ng.length + ' 行，确认后才会改动'];
+      if (generic) notes.unshift('泛化请求：按正文中的「例会」「签到」推断为会议签到表，没有反问');
+      return {grid: ng, notes};
+    }};
+  }
+  /* 来源类：附件 > 粘贴的数据 > 示例 > 本文档 */
+  const ncols = g[0].length, lines = t.split('\n');
+  let dataText = lines.length > 1 ? lines.slice(1).join('\n') : '';
+  if (!dataText && !/提取|填入|按|根据|生成|补全|撰写|格式/.test(t) && parsePaste(t, ncols).every(r => r.length >= Math.max(2, ncols - 1)) && /\d/.test(t) && t.length > 20) dataText = t;
+  let source = st.files.length ? 'upload' : dataText.trim() ? 'paste' : /示例/.test(t) ? 'sample' : sc.needFile ? 'need' : sc.docRows ? 'doc' : 'sample';
+  if (!dataText.trim() && !st.files.length && /拆分填入|粘贴/.test(t)) return {err: '从第二行开始粘贴要填的内容（每行一条），然后再发送'};
+  if (source === 'need') return {err: '先点「+」上传图片或文件，或者直接把截图粘贴进输入框'};
+  if ((source === 'sample' || source === 'doc') && !emptyCount(g) && !cells.length) return {err: '这张表没有空白行可以填写，可以试试下方的场景'};
+  return {run: () => {
+    const notes = pre ? [pre] : []; let res;
+    const nEmpty = emptyCount(g) || 3;
+    if (source === 'doc'){ res = listFill(g, sc.docRows, {src: sc.docSrc}); notes.push('内容来自本文档正文；悬停预览中的任意一行，可看到对应原文'); }
+    else if (source === 'paste'){ res = listFill(g, parsePaste(dataText, ncols)); notes.push('已把你粘贴的 ' + parsePaste(dataText, ncols).length + ' 行内容按表头拆分'); }
+    else if (source === 'upload'){
+      const tf = st.files.find(f => f.kind === 'text');
+      if (tf){ res = listFill(g, parsePaste(tf.text, ncols)); notes.push('内容来自附件「' + tf.name + '」'); }
+      else if (sc.fileRows){ res = listFill(g, sc.fileRows, {src: sc.fileRows.map((_, i) => 'img' + i)}); notes.push('内容来自附件「' + st.files[0].name + '」（演示中识别结果为预置）；悬停预览行可看到它来自第几行'); }
+      else { res = listFill(g, sc.paste ? parsePaste(sc.paste, ncols) : sampleRows(g, nEmpty)); notes.push('内容来自附件「' + st.files[0].name + '」（演示中识别结果为预置）'); }
+    } else { res = listFill(g, sampleRows(g, nEmpty)); notes.push('示例数据，非真实信息，适合做模板或演示'); }
+    if (res.added) notes.push('内容比空行多，新增了 ' + res.added + ' 行');
+    let out = {grid: res.grid, notes};
+    if (cells.length) { out = restrict(out, g, selSet); out.notes = notes.concat('只处理了选中的 ' + cells.length + ' 格'); }
+    return out;
+  }};
+}
+function ask(text, keepText, pre){
+  const st = S[cur];
+  if (!keepText) st.text = text;
+  st.open = true; st.err = ''; st.route = null; st.routeMsg = ''; st.optPrev = null; st.info = null; st.ex = null;
+  const p = pre || plan(text);
+  if (p.err){ st.err = p.err; st.phase = 'idle'; render(); return; }
+  if (p.route){ st.route = p.route; st.phase = 'idle'; render(); return; }
+  st.last = text;
+  const res = p.run();
+  if (p.instant){
+    st.snapshot = clone(st.grid);
+    st.grid = res.grid.map(r => r.map(c => ({t: c.t, k: c.k, cs: c.cs, wasP: !!c.p})));
+    st.phase = 'applied'; st.applied = {msg: res.msg, instant: true, note: p.note}; st.flash = true; st.sel = null;
+    render(); focusSel('[data-act="undo"]'); return;
+  }
+  if (p.note) res.notes = [p.note].concat(res.notes || []);
+  let o = 0; res.grid.forEach(r => r.forEach(c => { if (c.p) c.o = o++; }));
+  if (!o){ st.err = '没有找到可以填入的内容'; st.phase = 'idle'; render(); return; }
+  st.preview = res; st.total = o; st.shown = 0; st.phase = 'gen';
+  clearInterval(st.timer);
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const step = reduce ? o : Math.max(1, Math.ceil(o / 30)), id = cur;
+  st.timer = setInterval(() => {
+    st.shown = Math.min(st.total, st.shown + step);
+    if (st.shown >= st.total){ clearInterval(st.timer); st.phase = 'preview'; if (id === cur){ render(); focusSel('[data-act="apply"]'); } return; }
+    if (id === cur) renderDoc();
+  }, 70);
+  render();
+}
+
+/* ---------- 固定的「猜你想要」 ---------- */
+const FIXED = ['帮我填写这份表格','序号/编号','计算/合计','补全内容','删除重复行','从文档提取内容填表'];
+const NUM_RE = /^-?[\d,，]+(\.\d+)?$/;
+function seqColOf(g){ if (!g[0] || g[0][0].k !== 'h') return -1; return g[0].findIndex(c => /序号|编号/.test(c.t)); }
+const isTotalRow = r => r.some(c => /^(合计|总计)$/.test(c.t.trim()));
+function needFileInfo(){ return {info: '这张表要照着图片或文件来填。点「+」上传，或直接把截图粘贴进输入框', act: SC[cur].needFile ? {label: '使用示例小票', k: 'demo'} : null}; }
+function resolveSeq(viaGeneric){
+  const sc = SC[cur], st = S[cur], g = st.grid, cells = selCells(st);
+  const note = viaGeneric ? '泛化请求：判断为「补齐序号」，已直接执行' : '';
+  if (sc.noSel) return {info: '这张表还没有表头。先点「帮我填写这份表格」生成表格结构，再来编号'};
+  if (sc.lesson) return {info: '这是表单型表格，没有可以编号的列'};
+  const single = cells.length && new Set(cells.map(x => x[1])).size === 1;
+  let target, label, c = seqColOf(g);
+  if (single){ target = cells; label = '选中的 ' + cells.length + ' 格'; }
+  else if (c >= 0){ target = dataIdx(g).filter(r => !isTotalRow(g[r])).map(r => [r, c]); label = '「' + g[0][c].t + '」列'; }
+  if (target){
+    const first = g[target[0][0]][target[0][1]].t;
+    const fmt = sc.seqFmt || (/^0\d$/.test(first) ? '01' : /^00\d$/.test(first) ? '001' : '1');
+    const changes = target.filter(([r, cc], i) => g[r][cc].t !== fmtSeq(fmt, i + 1)).length;
+    if (!changes) return {info: label + '的序号已经是连续的，不需要调整'};
+    const text = '将' + label + '从 ' + fmtSeq(fmt, 1) + ' 开始连续编号，共 ' + target.length + ' 个';
+    return {text, plan: {instant: true, note, run: () => { const ng = clone(g); target.forEach(([r, cc], i) => { const v = fmtSeq(fmt, i + 1); if (ng[r][cc].t !== v) ng[r][cc] = Object.assign({}, ng[r][cc], {t: v, p: true}); }); return {grid: ng, msg: '已填充 ' + target.length + ' 个序号（' + fmtSeq(fmt, 1) + ' 至 ' + fmtSeq(fmt, target.length) + '）'}; }}};
+  }
+  if (!g[0] || g[0][0].k !== 'h') return {info: '这张表没有表头，暂时没有可以编号的列'};
+  const rows = dataIdx(g);
+  return {text: '在表格最左侧插入「序号」列，并从 1 开始编号', plan: {instant: true, note, run: () => {
+    const ng = g.map((r, ri) => [ri === 0 ? {t: '序号', k: 'h', cs: 1, p: true} : {t: String(rows.indexOf(ri) + 1), k: 'd', cs: 1, p: true}].concat(r.map(x => Object.assign({}, x))));
+    return {grid: ng, msg: '已在最左侧插入「序号」列，并编号 1 至 ' + rows.length};
+  }}};
+}
+function resolveCalc(){
+  const sc = SC[cur], st = S[cur], g = st.grid;
+  if (sc.calc) return {text: sc.opt(st)};
+  if (!g[0] || g[0][0].k !== 'h') return {info: '这张表里没有数字列，暂时没有可以计算的内容'};
+  const body = dataIdx(g).filter(r => !isTotalRow(g[r]));
+  const cols = g[0].map((h, c) => c).filter(c => !/序号|编号|单价|价格|占比|比例|率/.test(g[0][c].t) && (() => { const v = body.map(r => g[r][c].t.trim()).filter(Boolean); return v.length >= 2 && v.every(x => NUM_RE.test(x)); })());
+  if (!cols.length) return {info: '这张表里没有数字列，暂时没有可以计算的内容'};
+  const labelCol = g[0].findIndex((h, c) => !cols.includes(c) && !/序号|编号/.test(h.t));
+  const names = cols.map(c => '「' + g[0][c].t + '」').join('');
+  return {text: '在表格末尾新增「合计」行，计算' + names + '列的合计', plan: {instant: true, run: () => {
+    const ng = clone(g).filter(r => !isTotalRow(r));
+    const row = ng[0].map((_, c) => ({t: '', k: 'd', cs: 1, p: true}));
+    if (labelCol >= 0) row[labelCol].t = '合计';
+    cols.forEach(c => { const sum = body.reduce((s, r) => s + (toNum(g[r][c].t) || 0), 0); row[c].t = body.some(r => /\./.test(g[r][c].t)) ? money(sum) : String(sum); });
+    ng.push(row);
+    return {grid: ng, msg: '已新增「合计」行：' + cols.map(c => g[0][c].t + ' ' + row[c].t).join('，') + '（' + body.length + ' 行求和）'};
+  }}};
+}
+function resolveFill(viaGeneric){
+  const sc = SC[cur], st = S[cur], g = st.grid;
+  if (sc.noSel) return {text: GENERIC};
+  if (sc.lesson) return {text: viaGeneric ? GENERIC : '生成教案各栏内容'};
+  if (selCells(st).length && !sc.docRows && !sc.needFile && cur !== 'paste') return resolveSeq(viaGeneric);
+  if (emptyCount(g) || selCells(st).length){
+    if (sc.docRows) return {text: viaGeneric ? GENERIC : sc.opt(st)};
+    if (sc.needFile) return st.files.length ? {text: viaGeneric ? GENERIC : '根据上传的文件填写表格'} : needFileInfo();
+    if (cur === 'paste') return {slot: '把以下内容拆分填入表格：\n', msg: '从第二行开始粘贴要填的内容（每行一条），然后发送'};
+    return {text: '生成示例数据补全空白行'};
+  }
+  const c = seqColOf(g);
+  if (c >= 0 && seqIssues(g.filter(r => !isTotalRow(r)), c).total) return resolveSeq(viaGeneric);
+  if (sc.calc && !g[g.length - 1][2].t) return resolveCalc();
+  return {info: '表格里没有需要补全的空白格。可以试试「删除重复行」，或者直接说要改什么，比如"把「市场部」改为「品牌部」"'};
+}
+function resolveChip(i){
+  const sc = SC[cur], st = S[cur], g = st.grid;
+  switch (i){
+    case 0: return resolveFill(true);
+    case 1: return resolveSeq(false);
+    case 2: return resolveCalc();
+    case 3: return resolveFill(false);
+    case 4: return dupRows(g).length ? {text: '删除表格中的重复行（保留第一次出现的），并重排序号'} : {info: '没有发现重复行，表格里每一行都是唯一的'};
+    case 5:
+      if (sc.docRows) return {text: sc.opt(st)};
+      if (sc.noSel) return {text: GENERIC};
+      return {info: '本文档正文里没有找到可以填进表格的内容。可以点「+」上传文件，或把内容直接粘贴进输入框', act: sc.needFile ? {label: '使用示例小票', k: 'demo'} : null};
+  }
+}
+
+/* ---------- 探索一下 ---------- */
+const I_COMPASS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg>';
+const I_IMG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>';
+const I_L = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>';
+const I_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
+const EX = [
+  {t:'三步用好 AI 填写', steps:['想只处理一部分？先在表格上拖动框选（可跳过）','在输入框说需求，或直接点「猜你想要」','生成的内容先预览再写入；序号、计算这类直接完成，都能撤销'],
+   img:'演示：框选 → 提问 → 预览 → 采用', try:'从「帮我填写这份表格」开始', chip:0},
+  {t:'序号 / 编号', d:'补齐空缺、重排乱掉的序号，或从任意数字开始编号。格式支持 1、01、001、(1) 和「一、」。', img:'演示：插入几行后序号乱了 → 一键重排', ask:'从 5 开始编号，格式 01', chip:1},
+  {t:'补全内容', d:'照着上面已填的几行续写剩下的行，或用示例数据把空白行补齐，适合做模板。', img:'演示：已填 2 行 → 按格式补全剩余 4 行', ask:'和上面一样', chip:3},
+  {t:'从文档、图片、文件提取', d:'读取本文档正文、上传的截图或文件，按表头逐项填入。预览时悬停某一行，能看到它的出处。', img:'演示：上传小票截图 → 自动填入采购清单', ask:'根据上传的图片填表', chip:5},
+  {t:'计算 / 合计', d:'对数字列求和、算占比和平均值，并写明算法，方便你核对结果。', img:'演示：费用表 → 一键算出合计与占比', ask:'计算合计，并补全占比', chip:2},
+  {t:'查重和批量修改', d:'删除重复行、按某一列排序、把 A 统一改为 B。字体、颜色这类排版需求会交给「AI 美化表格」。', img:'演示：发现重复行 → 删除并重排序号', ask:'把「市场部」改为「品牌部」', chip:4}
+];
+const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function exploreHTML(){
+  const st = S[cur], x = st.ex, c = EX[x.i], last = x.i === EX.length - 1;
+  let h = '<section class="explore' + (x.anim ? ' anim' : '') + '" id="explore" tabindex="-1" aria-label="AI 填写使用说明" aria-roledescription="轮播">';
+  h += '<div class="exhead"><h3>探索 AI 填写</h3><span class="ct" aria-live="polite">' + (x.i + 1) + ' / ' + EX.length + '</span><button class="xb" data-act="exclose" aria-label="收起使用说明">' + XS.replace('width="12" height="12"', 'width="14" height="14"') + '</button></div>';
+  h += '<div class="exbody' + (x.dir ? ' from-' + x.dir : '') + '">';
+  h += '<div class="ph-img" role="img" aria-label="示意图占位：' + esc(c.img) + '" data-placeholder="explore-' + (x.i + 1) + '">' + I_IMG + '<b>示意图占位</b><span>' + esc(c.img) + '</span><span>建议 2:1 动图，1120 × 560 px</span></div>';
+  h += '<p class="extitle">' + esc(c.t) + '</p>';
+  if (c.steps) h += '<ol class="exsteps">' + c.steps.map((s, i) => '<li><span class="no">' + (i + 1) + '</span><span>' + esc(s) + '</span></li>').join('') + '</ol>';
+  else h += '<p class="exdesc">' + esc(c.d) + '</p>';
+  if (c.ask) h += '<div class="exask">也可以这样问：<button data-act="exask" data-k="' + x.i + '" title="填入输入框，可以改了再发">' + esc(c.ask) + '</button></div>';
+  h += '</div><div class="exfoot">';
+  h += '<button class="navb" data-act="exprev" aria-label="上一张"' + (x.i === 0 ? ' aria-disabled="true"' : '') + '>' + I_L + '</button>';
+  h += '<div class="dots" role="tablist" aria-label="选择说明页">' + EX.map((e, i) => '<button role="tab" aria-selected="' + (i === x.i) + '" aria-label="第 ' + (i + 1) + ' 张：' + esc(e.t) + '" data-act="exgo" data-k="' + i + '"' + (i === x.i ? ' class="on"' : '') + '></button>').join('') + '</div>';
+  h += '<button class="navb" data-act="exnext" aria-label="' + (last ? '完成' : '下一张') + '">' + (last ? XS.replace('width="12" height="12"', 'width="14" height="14"') : I_R) + '</button>';
+  h += '<span class="sp"></span><button class="sbtn pri" data-act="extry" data-k="' + x.i + '">' + esc(c.try || '在这张表上试试') + '</button>';
+  return h + '</div></section>';
+}
+function openExplore(){
+  const st = S[cur];
+  st.open = true; st.err = ''; st.info = null; st.route = null;
+  st.ex = {i: st.exLast || 0, dir: '', anim: true};
+  render();
+  const el = document.getElementById('explore');
+  if (el){ el.focus({preventScroll: true}); el.scrollIntoView({block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth'}); }
+}
+function goExplore(i){
+  const st = S[cur]; if (!st.ex || i < 0 || i >= EX.length || i === st.ex.i) return;
+  st.ex = {i, dir: i > st.ex.i ? 'r' : 'l', anim: false}; st.exLast = i;
+  render();
+  const el = document.getElementById('explore'); if (el) el.focus({preventScroll: true});
+}
+function closeExplore(after, refocus){
+  const st = S[cur], el = document.getElementById('explore');
+  const done = () => { st.ex = null; render(); if (after) after(); else if (refocus) focusSel('[data-act="explore"]'); };
+  if (el && !reduceMotion()){ el.classList.remove('anim'); el.classList.add('out'); setTimeout(done, 160); } else done();
+}
+function runChip(i){
+  const st = S[cur], r = resolveChip(i);
+  st.open = true; st.err = ''; st.route = null; st.info = null;
+  if (r.info){ st.info = {msg: r.info, act: r.act}; st.phase = 'idle'; render(); return; }
+  if (r.slot != null){ st.text = r.slot; st.info = {msg: r.msg}; st.phase = 'idle'; render(); setTimeout(() => { const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 30); return; }
+  if (r.plan){ st.text = r.text; ask(r.text, true, r.plan); return; }
+  ask(r.text);
+}
+function optimize(){
+  const st = S[cur], sc = SC[cur], t = st.text.trim();
+  if (st.optBusy || st.phase === 'gen') return;
+  st.optBusy = true; st.err = ''; render();
+  setTimeout(() => {
+    const prev = st.text; let out;
+    if (cur === 'paste'){
+      const lines = t.split('\n'), data = lines.length > 1 ? lines.slice(1).join('\n') : (parsePaste(t, 4).length && /\d/.test(t) ? t : '');
+      out = sc.opt(st, data);
+    } else if (!t || t === GENERIC) out = sc.opt(st);
+    else if (sc.noSel){ const key = Object.keys(TPL).find(k => TPL[k].kw.test(t)); out = key ? '生成一张「' + t + '」用的' + TPL[key].name + '，' + sc.tail : t + '。' + sc.tail; }
+    else if (sc.lesson && !/《/.test(t)) out = t + '。' + sc.tail;
+    else out = /[。；]$/.test(t) ? t + sc.tail : t + '。' + sc.tail;
+    st.text = out; st.optPrev = prev; st.optBusy = false; render();
+    const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }, 450);
+}
+
+/* ---------- 渲染 ---------- */
+function tableHTML(){
+  const st = S[cur], sc = SC[cur];
+  const showPv = st.phase === 'gen' || st.phase === 'preview';
+  const g = showPv ? st.preview.grid : st.grid;
+  const selSet = setOf(selCells(st));
+  let firstEmpty = -1;
+  if (sc.inlineRow && !st.open && !st.sel) firstEmpty = g.findIndex(r => r[0].k !== 'h' && isEmptyRow(r));
+  let h = '<table class="t"><tbody>';
+  g.forEach((r, ri) => {
+    h += '<tr' + (ri === firstEmpty ? ' data-first-empty="1"' : '') + '>';
+    r.forEach((c, ci) => {
+      const cls = [];
+      if (c.k === 'h') cls.push('h');
+      if (c.k === 'l') cls.push('l');
+      if (c.k === 'v' && c.cs > 1 && sc.lesson) cls.push('big');
+      let txt = esc(c.t), old = '', swap = '';
+      if (showPv && c.p){
+        if (st.phase === 'gen' && c.o >= st.shown){ cls.push('skel'); txt = ''; }
+        else {
+          cls.push('pv');
+          if (c.old != null && c.old !== c.t) old = '<span class="old">' + esc(c.old) + '</span>';
+          if (c.alts && st.phase === 'preview') swap = '<button class="swap" data-act="swap" data-r="' + ri + '" data-c="' + ci + '">换一版</button>';
+        }
+      } else if (!showPv && selSet.has(ri + ',' + ci)) cls.push('sel');
+      if (st.phase === 'applied' && st.flash && c.wasP) cls.push('just');
+      let srcAttr = '';
+      if (showPv && c.src && cls.includes('pv')) srcAttr = ' data-src="' + c.src + '" title="' + (c.src.indexOf('img') === 0 ? '来自图片第 ' + (+c.src.slice(3) + 1) + ' 行' : '悬停查看原文出处') + '"';
+      h += '<td data-r="' + ri + '" data-c="' + ci + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (c.cs > 1 ? ' colspan="' + c.cs + '"' : '') + srcAttr + '>' + old + txt + swap + '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  if (firstEmpty >= 0){
+    const n = g.filter(r => r[0].k !== 'h' && isEmptyRow(r)).length;
+    h += '<button class="inhint" id="inhint" data-act="inline-gen">' + SPARK + '按上面格式补全剩下 ' + n + ' 行</button>';
+  }
+  return h;
+}
+function statusHTML(){
+  const st = S[cur];
+  if (st.err) return '<div class="stat e" role="alert">' + esc(st.err) + '</div>';
+  if (st.info) return '<div class="stat i" role="status"><span class="grow">' + esc(st.info.msg) + '</span>' + (st.info.act ? '<button class="sbtn" data-act="infoact" data-k="' + st.info.act.k + '">' + esc(st.info.act.label) + '</button>' : '') + '</div>';
+  if (st.route) return '<div class="stat w"><span class="grow">「' + esc(st.route) + '」是排版需求，用「AI 美化表格」更合适' + (st.routeMsg ? '<span class="sub">' + esc(st.routeMsg) + '</span>' : '') + '</span><button class="sbtn" data-act="route">打开 AI 美化表格</button></div>';
+  if (st.phase === 'gen'){
+    const pct = st.total ? Math.round(st.shown / st.total * 100) : 0;
+    return '<div class="stat" role="status"><span class="grow">正在生成预览… ' + st.shown + ' / ' + st.total + '</span><span class="bar"><i style="width:' + pct + '%"></i></span></div>';
+  }
+  if (st.phase === 'preview'){
+    const notes = (st.preview.notes || []).map(n => '<span class="sub">' + esc(n) + '</span>').join('');
+    return '<div class="stat"><span class="grow">预览已生成：' + st.total + ' 个单元格（蓝色），确认后才会写入' + notes + '</span><button class="sbtn pri" data-act="apply">采用</button><button class="sbtn" data-act="regen">重新生成</button><button class="lnk" data-act="discard">放弃</button></div>';
+  }
+  if (st.phase === 'applied'){
+    return '<div class="stat ok" role="status"><span class="grow">' + esc(st.applied.msg) + (st.applied.note ? '<span class="sub">' + esc(st.applied.note) + '</span>' : '') + (st.applied.instant ? '<span class="sub">确定性操作，已直接写入</span>' : '') + '</span><button class="sbtn" data-act="undo">撤销</button></div>';
+  }
+  return '';
+}
+function dialogHTML(){
+  const st = S[cur], sc = SC[cur];
+  if (!st.open) return '';
+  const cells = selCells(st), busy = st.phase === 'gen';
+  let pills = '';
+  if (cells.length) pills += '<span class="pill selp"><span class="nm">已选中 ' + esc(selDesc(cells)) + '</span><button data-act="clearsel" aria-label="移除选区">' + XS + '</button></span>';
+  st.files.forEach((f, i) => { pills += '<span class="pill">' + (f.url ? '<img src="' + f.url + '" alt="">' : I_FILE) + '<span class="nm">' + esc(f.name) + '</span><button data-act="rmfile" data-k="' + i + '" aria-label="移除附件 ' + esc(f.name) + '">' + XS + '</button></span>'; });
+  let h = '<div class="dlg-wrap" id="dlgwrap"><div class="dlg" id="dlg">';
+  if (pills) h += '<div class="pills">' + pills + '</div>';
+  h += '<label class="sr-only" for="ask">向 AI 填写提问</label><textarea id="ask" rows="2" placeholder="输入问题，或从下方场景提问"' + (busy ? ' readonly' : '') + '>' + esc(st.text) + '</textarea>';
+  h += '<div class="tools">';
+  h += '<button class="ib' + (st.optBusy ? ' busy' : '') + '" data-act="optimize" aria-label="优化提示词">' + I_OPT + '<span class="tt">' + (st.optBusy ? '优化中…' : '优化提示词') + '</span></button>';
+  h += '<button class="ib" data-act="upload" aria-label="上传文件或图片">' + I_ADD + '<span class="tt">上传文件或图片</span></button>';
+  if (st.files.length) h += '<span class="cnt">' + st.files.length + '/3</span>';
+  const has = st.text.trim().length > 0;
+  h += busy ? '<button class="send stop" data-act="stop" aria-label="停止生成">' + I_STOP + '</button>' : '<button class="send' + (has ? ' on' : '') + '" data-act="send" aria-label="发送">' + I_SEND + '</button>';
+  h += '</div></div>';
+  if (st.optPrev != null) h += '<div class="optnote">已根据当前表格优化提示词<button class="lnk" data-act="optundo">恢复原文</button></div>';
+  h += statusHTML();
+  if (!busy && st.phase !== 'preview'){
+    if (st.ex){ h += exploreHTML(); st.ex.anim = false; st.ex.dir = ''; return h + '</div>'; }
+    h += '<div class="sugg"><p class="lb">猜你想要</p><div class="row">';
+    FIXED.forEach((label, i) => { h += '<button data-act="chip" data-k="' + i + '">' + SPARK + esc(label) + '</button>'; });
+    h += '<button class="ex" data-act="explore" aria-expanded="false">' + I_COMPASS + '探索一下</button>';
+    h += '</div></div>';
+  }
+  return h + '</div>';
+}
+function renderDoc(){
+  const sc = SC[cur], st = S[cur];
+  let h = sc.body;
+  if (sc.inline && !st.open){ const ih = sc.inline(st); if (ih) h += '<div class="topchip">' + ih + '</div>'; }
+  h += '<div class="tblwrap" id="tblwrap">' + tableHTML() + '</div>' + dialogHTML();
+  const ae = document.activeElement, aid = ae && ae.id;
+  let s0, s1; try { s0 = ae.selectionStart; s1 = ae.selectionEnd; } catch(e){}
+  $('#page').innerHTML = h;
+  if (aid === 'ask'){ const el = document.getElementById('ask'); if (el){ el.focus(); try { el.setSelectionRange(s0, s1); } catch(e){} } }
+  autosize(); placeHint();
+  if (st.flash) setTimeout(() => { st.flash = false; }, 1500);
+}
+function autosize(){ const t = document.getElementById('ask'); if (t){ t.style.height = 'auto'; t.style.height = Math.max(52, t.scrollHeight) + 'px'; } }
+function placeHint(){ const b = document.getElementById('inhint'), tr = document.querySelector('tr[data-first-empty]'); if (b && tr){ b.style.top = tr.offsetTop + 'px'; b.style.height = tr.offsetHeight + 'px'; } }
+function renderScen(){
+  let h = '', n = 0;
+  ORDER.forEach(([g, share, ids]) => {
+    h += '<h2><span>' + g + '</span><em>' + share + '</em></h2>';
+    ids.forEach(id => { n++; h += '<button data-act="scen" data-k="' + id + '" aria-current="' + (id === cur) + '"><span class="n">' + n + '</span>' + SC[id].label + '</button>'; });
+  });
+  $('#scen').innerHTML = h + '<p class="src-note">分组依据真实用户提问的分类</p>';
+}
+function renderNotes(){
+  const sc = SC[cur], st = S[cur];
+  const idx = !st.open ? 0 : {idle: 1, gen: 2, preview: 3, applied: 4}[st.phase];
+  const instant = st.phase === 'applied' && st.applied && st.applied.instant;
+  let h = '<h2>这一屏的设计</h2><div class="steps" aria-label="当前所处步骤">';
+  ['入口','提问','生成中','预览','已写入'].forEach((s, i) => {
+    const cls = instant && (i === 2 || i === 3) ? 'skip' : i < idx ? 'done' : i === idx ? 'cur' : '';
+    h += '<span class="' + cls + '"' + (i === idx ? ' aria-current="step"' : '') + '>' + s + '</span>';
+  });
+  h += '</div><dl><dt>对应 query 类型</dt><dd>' + esc(sc.notes.scene) + '</dd><dt>用户在说什么</dt><dd>' + esc(sc.notes.pain) + '</dd></dl><ol>';
+  sc.notes.pts.forEach(p => { h += '<li>' + esc(p[0]) + (p[1] ? '<span class="why">' + esc(p[1]) + '</span>' : '') + '</li>'; });
+  h += '</ol><button class="reset" data-act="reset">重置本场景</button>';
+  $('#notes').innerHTML = h;
+}
+function render(){
+  const sc = SC[cur], st = S[cur];
+  $('#tabname').textContent = sc.doc;
+  $('#tip').innerHTML = '<b>AI 填写</b>' + esc(sc.tip);
+  $('#aibtn').setAttribute('aria-expanded', String(st.open));
+  renderScen(); renderDoc(); renderNotes();
+}
+function focusSel(sel){ setTimeout(() => { const el = document.querySelector(sel); if (el) el.focus({preventScroll: true}); }, 30); }
+function openDlg(){
+  const st = S[cur];
+  if (!st.open){ st.open = true; st.phase = 'idle'; st.err = ''; render(); }
+  const w = document.getElementById('dlgwrap'), d = document.getElementById('dlg');
+  if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  if (d){ d.classList.remove('pulse'); void d.offsetWidth; d.classList.add('pulse'); }
+  focusSel('#ask');
+}
+function closeDlg(){ const st = S[cur]; clearInterval(st.timer); st.open = false; st.phase = 'idle'; st.err = ''; st.route = null; render(); }
+function switchTo(k){ const st = S[cur]; clearInterval(st.timer); if (st.phase === 'gen') st.phase = 'idle'; cur = k; try { history.replaceState(null, '', '#' + k); } catch(_){} render(); }
+function addFile(f){
+  const st = S[cur];
+  if (st.files.length >= 3){ st.err = '最多添加 3 个附件'; render(); return; }
+  if (/^image\//.test(f.type)){ const rd = new FileReader(); rd.onload = () => { st.files.push({name: f.name || '粘贴的截图.png', kind: 'image', url: rd.result}); st.err = ''; render(); }; rd.readAsDataURL(f); }
+  else if (/\.(txt|csv)$/i.test(f.name)){ const rd = new FileReader(); rd.onload = () => { st.files.push({name: f.name, kind: 'text', text: String(rd.result || '')}); st.err = ''; render(); }; rd.readAsText(f); }
+  else if (/\.(pdf|docx?|xlsx?)$/i.test(f.name)){ st.files.push({name: f.name, kind: 'doc'}); st.err = ''; render(); }
+  else { st.err = '支持图片、PDF、Word、Excel、txt、csv'; render(); }
+}
+
+/* ---------- 事件 ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, k = b.dataset.k, st = S[cur], sc = SC[cur];
+  switch (act){
+    case 'scen': switchTo(k); break;
+    case 'open': openDlg(); break;
+    case 'send': st.ex = null; ask(st.text, true); break;
+    case 'stop': clearInterval(st.timer); st.phase = 'idle'; render(); focusSel('#ask'); break;
+    case 'chip': runChip(+k); break;
+    case 'explore': openExplore(); break;
+    case 'exclose': closeExplore(null, true); break;
+    case 'exprev': goExplore(st.ex.i - 1); break;
+    case 'exnext': if (st.ex.i === EX.length - 1){ st.exLast = 0; closeExplore(null, true); } else goExplore(st.ex.i + 1); break;
+    case 'exgo': goExplore(+k); break;
+    case 'extry': { const i = +k; st.exLast = i; closeExplore(() => runChip(EX[i].chip)); break; }
+    case 'exask': { const i = +k; st.exLast = i; closeExplore(() => { st.text = EX[i].ask; st.optPrev = null; render(); const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }); break; }
+    case 'infoact': if (k === 'demo'){ if (!st.files.some(f => f.url === RECEIPT)) st.files.push({name: '示例小票.png', kind: 'image', url: RECEIPT}); ask('根据上传的小票图片填写采购清单'); } break;
+    case 'quick': { st.open = true; ask(sc.opt(st)); break; }
+    case 'inline-gen': { runChip(3); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
+    case 'selcol': st.sel = {r0: 1, c0: 0, r1: st.grid.length - 1, c1: 0}; openDlg(); render(); break;
+    case 'clearsel': st.sel = null; render(); focusSel('#ask'); break;
+    case 'optimize': optimize(); break;
+    case 'optundo': if (st.optPrev != null){ st.text = st.optPrev; st.optPrev = null; render(); focusSel('#ask'); } break;
+    case 'upload': $('#filein').value = ''; $('#filein').click(); break;
+    case 'rmfile': st.files.splice(+k, 1); render(); break;
+    case 'route': st.routeMsg = '演示：真实产品会打开「AI 美化表格」，并带上你的描述'; render(); break;
+    case 'swap': { const c = st.preview.grid[+b.dataset.r][+b.dataset.c]; c.ai = 1 - c.ai; c.t = c.alts[c.ai]; renderDoc(); break; }
+    case 'apply':
+      st.snapshot = clone(st.grid);
+      st.grid = st.preview.grid.map(r => r.map(c => ({t: c.t, k: c.k, cs: c.cs, wasP: !!c.p})));
+      st.phase = 'applied'; st.applied = {msg: '已写入 ' + st.total + ' 个单元格', instant: false}; st.flash = true; st.sel = null;
+      render(); focusSel('[data-act="undo"]'); break;
+    case 'undo': st.grid = st.snapshot; st.phase = 'idle'; render(); focusSel('#ask'); break;
+    case 'regen': ask(st.last, true); break;
+    case 'discard': st.phase = 'idle'; render(); focusSel('#ask'); break;
+    case 'reset': clearInterval(st.timer); init(cur); render(); break;
+  }
+});
+$('#aibtn').addEventListener('click', () => { if (S[cur].open && S[cur].phase !== 'gen') closeDlg(); else openDlg(); });
+$('#filein').addEventListener('change', e => { [...(e.target.files || [])].forEach(addFile); });
+document.addEventListener('input', e => {
+  if (e.target.id !== 'ask') return;
+  const st = S[cur]; st.text = e.target.value; st.optPrev = null; autosize();
+  if (st.info && !/^把以下内容/.test(st.text)){ st.info = null; const inf = document.querySelector('.stat.i'); if (inf) inf.remove(); }
+  const sb = document.querySelector('.send'); if (sb && !sb.classList.contains('stop')) sb.classList.toggle('on', st.text.trim().length > 0);
+  if (st.err){ st.err = ''; const er = document.querySelector('.stat.e'); if (er) er.remove(); }
+  const on = document.querySelector('.optnote'); if (on) on.remove();
+});
+document.addEventListener('keydown', e => {
+  const st = S[cur];
+  if (st.ex && e.target.closest && e.target.closest('#explore')){
+    if (e.key === 'ArrowRight'){ e.preventDefault(); goExplore(st.ex.i + 1); return; }
+    if (e.key === 'ArrowLeft'){ e.preventDefault(); goExplore(st.ex.i - 1); return; }
+    if (e.key === 'Escape'){ e.preventDefault(); closeExplore(null, true); return; }
+  }
+  if (e.key === 'Escape'){
+    if (st.sel && !(e.target.id === 'ask')){ st.sel = null; render(); return; }
+    if (st.open && e.target.closest && e.target.closest('#dlgwrap')){ e.preventDefault(); closeDlg(); $('#aibtn').focus(); }
+    return;
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.id === 'ask' && st.phase !== 'gen'){ e.preventDefault(); ask(st.text, true); }
+});
+document.addEventListener('paste', e => {
+  if (!S[cur].open || !e.target.closest || !e.target.closest('#dlgwrap')) return;
+  const fl = e.clipboardData && e.clipboardData.files;
+  if (fl && fl.length && /^image\//.test(fl[0].type)){ e.preventDefault(); addFile(fl[0]); }
+});
+/* 框选 */
+document.addEventListener('mousedown', e => {
+  const st = S[cur];
+  const td = e.target.closest && e.target.closest('#tblwrap td[data-r]');
+  if (td && !e.target.closest('button') && st.phase !== 'gen' && st.phase !== 'preview' && !SC[cur].noSel){
+    if (st.phase === 'applied') st.phase = 'idle';
+    const r = +td.dataset.r, c = +td.dataset.c;
+    if (r === 0 && st.grid[0][c] && st.grid[0][c].k === 'h') st.sel = {r0: 1, c0: c, r1: st.grid.length - 1, c1: c};
+    else st.sel = {r0: r, c0: c, r1: r, c1: c};
+    drag = true; e.preventDefault(); render(); return;
+  }
+  if (st.sel && !e.target.closest('#dlgwrap, .aibtn-wrap, .topchip, #tblwrap')){ st.sel = null; render(); }
+});
+document.addEventListener('mouseover', e => {
+  const t = e.target;
+  if (drag){
+    const td = t.closest && t.closest('#tblwrap td[data-r]'), st = S[cur];
+    if (td && st.sel){ const r = +td.dataset.r, c = +td.dataset.c; if (r !== st.sel.r1 || c !== st.sel.c1){ st.sel.r1 = Math.max(SC[cur].lesson ? 0 : 1, r); st.sel.c1 = c; renderDoc(); } }
+    return;
+  }
+  document.querySelectorAll('.src.hl').forEach(x => x.classList.remove('hl'));
+  const td = t.closest && t.closest('td[data-src]'); if (!td) return;
+  td.parentElement.querySelectorAll('td[data-src]').forEach(c => { const m = document.getElementById('m-' + c.dataset.src); if (m) m.classList.add('hl'); });
+});
+document.addEventListener('mouseup', () => { if (drag){ drag = false; const st = S[cur]; if (selCells(st).length && !st.open){ st.open = true; st.phase = 'idle'; } render(); } });
+window.addEventListener('resize', placeHint);
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (SC[h] && h !== cur){ cur = h; render(); } });
+render();
+})();
+</script>
+</body>
+</html>
