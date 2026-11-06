@@ -101,11 +101,11 @@ table.t td.just{animation:flash 1.4s ease-out}
 .topchip button.plain{border-style:solid;background:var(--win);color:var(--ink-2)}
 
 /* 简约对话框 */
-.dlg-bar{display:flex;justify-content:flex-end;margin-top:6px}
+.dlg-bar{display:flex;justify-content:flex-end;margin-bottom:4px}
 .dlg-bar button{border:none;background:none;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-3);padding:4px 8px;border-radius:6px}
 .dlg-bar button:hover{background:#F2F4F7;color:var(--ink)}
 .dlg-bar svg{width:14px;height:14px}
-.dlg-wrap{margin-top:2px;max-width:600px}
+.dlg-wrap{margin-top:12px;max-width:600px}
 .dlg{border:1px solid #E1E3E7;border-radius:22px;background:#FFFFFF;box-shadow:0 6px 24px rgba(31,35,41,.08);padding:14px 14px 10px 18px;transition:border-color .15s,box-shadow .15s}
 .dlg:focus-within{border-color:#B9C9F5;box-shadow:0 6px 24px rgba(47,107,255,.10)}
 .dlg.pulse{animation:ring .8s ease-out}
@@ -944,7 +944,7 @@ function dialogHTML(){
   let pills = '';
   if (cells.length) pills += '<span class="pill selp"><span class="nm">已选中 ' + esc(selDesc(cells)) + '</span><button data-act="clearsel" aria-label="移除选区">' + XS + '</button></span>';
   st.files.forEach((f, i) => { pills += '<span class="pill">' + (f.url ? '<img src="' + f.url + '" alt="">' : I_FILE) + '<span class="nm">' + esc(f.name) + '</span><button data-act="rmfile" data-k="' + i + '" aria-label="移除附件 ' + esc(f.name) + '">' + XS + '</button></span>'; });
-  let h = '<div class="dlg-bar"><button data-act="collapse" aria-label="收起 AI 填写对话框">收起<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="dlg-wrap" id="dlgwrap"><div class="dlg" id="dlg">';
+  let h = '<div class="dlg-wrap" id="dlgwrap"><div class="dlg-bar"><button data-act="collapse" aria-label="收起 AI 填写对话框">收起<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="dlg" id="dlg">';
   if (pills) h += '<div class="pills">' + pills + '</div>';
   h += '<label class="sr-only" for="ask">向 AI 填写提问</label><textarea id="ask" rows="2" placeholder="输入问题，或从下方场景提问"' + (busy ? ' readonly' : '') + '>' + esc(st.text) + '</textarea>';
   h += '<div class="tools">';
