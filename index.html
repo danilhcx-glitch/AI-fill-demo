@@ -156,6 +156,11 @@ table.t td.just{animation:flash 1.4s ease-out}
 .sugg button{border:1px solid #E1E3E7;background:#FFFFFF;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;text-align:left}
 .sugg button:hover{border-color:var(--accent-line);color:var(--accent-ink);background:#F8FAFF}
 .sugg button svg{width:13px;height:13px;color:var(--accent);flex:none}
+.sugg button.pchip svg{width:15px;height:15px;color:var(--ink-3)}
+.sugg button.cchip svg{color:#E8A317}
+.sugg .lg{display:flex;gap:14px;font-size:12px;color:var(--ph);margin:8px 0 0 4px}
+.sugg .lg span{display:inline-flex;align-items:center;gap:4px}
+.sugg .lg svg{width:12px;height:12px}
 
 .notes{background:var(--win);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:sticky;top:12px}
 @media (max-width:1200px){.notes{position:static}}
@@ -449,7 +454,7 @@ const SC = {
     notes:{scene:'泛化填表（最常见）', pain:'只说"请帮我填写这份表格"；空表时模型现在会反问',
       pts:[['点「猜你想要」里的"帮我填写这份表格"', '不会反问：按正文的"例会""签到"推断为会议签到表'],
            ['先在输入框写"团建"，再点「优化提示词」', '模糊的需求被补成带列名、行数的具体要求'],
-           ['「猜你想要」是 6 个固定入口，每个场景都一样', '点下去按当前表格判断具体做什么；做不了时会说明原因，不会硬做']]}
+           ['「猜你想要」分两类：填写、补全、提取会把提示词填进输入框，补不补充都可以发送；序号、计算、删除重复行点了立即执行', '图标区分两类：铅笔样式是填入，闪电是立即执行']]}
   },
   partial: {
     label:'按上面的格式补全', doc:'11月第2周值班安排',
@@ -604,7 +609,7 @@ const REP_RE = /^把?[「"“]?(.+?)[」"”]?(?:都|全部)?(?:改为|改成|�
 const S = {};
 function init(id){
   S[id] = {grid: SC[id].grid(), open: false, phase: 'idle', text: '', files: [], sel: null, err: '', route: null, routeMsg: '',
-    optPrev: null, optBusy: false, info: null, ex: null, preview: null, snapshot: null, shown: 0, total: 0, timer: null, flash: false, applied: null, last: null, note: ''};
+    optPrev: null, optBusy: false, info: null, ex: null, pending: null, preview: null, snapshot: null, shown: 0, total: 0, timer: null, flash: false, applied: null, last: null, note: ''};
 }
 Object.keys(SC).forEach(init);
 let cur = 'empty', drag = false;
@@ -617,6 +622,7 @@ function plan(text){
   const cells = selCells(st), selSet = setOf(cells);
   if (!t) return {err: '先输入需求，或点下方的场景提问'};
   if (FMT_RE.test(t) && !/序号|编号|合计|填/.test(t)) return {route: t};
+  if (/从本文档中?提取|从文档提取/.test(t) && !sc.docRows && !sc.noSel && !st.files.length) return {err: '本文档正文里没有找到可以填进表格的内容。可以点「+」上传文件，或把内容直接粘贴进输入框'};
   const m = t.match(REP_RE);
   if (m){
     const from = m[1].trim(), to = m[2].trim(); let hits = 0;
@@ -854,13 +860,44 @@ function closeExplore(after, refocus){
   const done = () => { st.ex = null; render(); if (after) after(); else if (refocus) focusSel('[data-act="explore"]'); };
   if (el && !reduceMotion()){ el.classList.remove('anim'); el.classList.add('out'); setTimeout(done, 160); } else done();
 }
-function runChip(i){
-  const st = S[cur], r = resolveChip(i);
+/* 预填类入口：填入提示词，等用户补充后发送；命令类入口：直接执行 */
+const PROMPT_CHIPS = {
+  0: {base: '帮我填写这份表格。补充要求：', hint: '可以在冒号后补充要求，比如“用示例数据”；不补充也可以直接发送'},
+  3: {base: '补全表格中的空白内容。参考内容（可直接粘贴）：\n', hint: '可以在下一行粘贴参考内容（每行一条）；不粘贴也可以直接发送，AI 会按当前表格补全'},
+  5: {base: '从本文档中提取内容填入表格。补充要求：', hint: '可以补充要提取的重点，比如“只要未完成的事项”；不补充也可以直接发送'}
+};
+const CMD_CHIPS = [1, 2, 4];
+const I_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h8M4 17h6"/><path d="M15 19l5-5-2-2-5 5v2z"/></svg>';
+const I_BOLT = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg>';
+function execResolved(r, keepText){
+  const st = S[cur];
   st.open = true; st.err = ''; st.route = null; st.info = null;
   if (r.info){ st.info = {msg: r.info, act: r.act}; st.phase = 'idle'; render(); return; }
-  if (r.slot != null){ st.text = r.slot; st.info = {msg: r.msg}; st.phase = 'idle'; render(); setTimeout(() => { const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 30); return; }
-  if (r.plan){ st.text = r.text; ask(r.text, true, r.plan); return; }
-  ask(r.text);
+  if (r.slot != null){ st.info = {msg: '先把要填的内容粘贴进输入框（每行一条），再发送'}; st.phase = 'idle'; render(); focusEnd(); return; }
+  if (r.plan){ if (!keepText) st.text = r.text; ask(r.text, true, r.plan); return; }
+  if (keepText) ask(r.text, true); else ask(r.text);
+}
+function focusEnd(){ setTimeout(() => { const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 30); }
+function runChip(i){
+  const st = S[cur];
+  if (PROMPT_CHIPS[i]){
+    const c = PROMPT_CHIPS[i];
+    st.open = true; st.err = ''; st.route = null; st.optPrev = null; st.phase = 'idle';
+    st.text = c.base; st.pending = {i, base: c.base}; st.info = {msg: c.hint};
+    render(); focusEnd(); return;
+  }
+  st.pending = null;
+  execResolved(resolveChip(i));
+}
+function sendCurrent(){
+  const st = S[cur]; st.ex = null;
+  if (st.pending && st.text.trim() === st.pending.base.trim()){
+    const i = st.pending.i; st.pending = null;
+    execResolved(resolveChip(i), true);
+    return;
+  }
+  st.pending = null;
+  ask(st.text, true);
 }
 function optimize(){
   const st = S[cur], sc = SC[cur], t = st.text.trim();
@@ -959,8 +996,10 @@ function dialogHTML(){
   if (!busy && st.phase !== 'preview'){
     if (st.ex){ h += exploreHTML(); st.ex.anim = false; st.ex.dir = ''; return h + '</div>'; }
     h += '<div class="sugg"><p class="lb">猜你想要</p><div class="row">';
-    FIXED.forEach((label, i) => { h += '<button data-act="chip" data-k="' + i + '">' + SPARK + esc(label) + '</button>'; });
+    [0, 3, 5].forEach(i => { h += '<button class="pchip" data-act="chip" data-k="' + i + '" title="填入输入框，可补充要求后发送">' + I_EDIT + esc(FIXED[i]) + '</button>'; });
+    CMD_CHIPS.forEach(i => { h += '<button class="cchip" data-act="chip" data-k="' + i + '" title="立即执行，可撤销">' + I_BOLT + esc(FIXED[i]) + '</button>'; });
     h += '<button class="ex" data-act="explore" aria-expanded="false">' + I_COMPASS + '探索一下</button>';
+    h += '</div><div class="lg"><span>' + I_EDIT.replace('stroke="currentColor"', 'stroke="#5F6670"') + '填入输入框，可补充后发送</span><span>' + I_BOLT.replace('fill="currentColor"', 'fill="#E8A317"') + '立即执行，可撤销</span>';
     h += '</div></div>';
   }
   return h + '</div>';
@@ -1035,7 +1074,7 @@ document.addEventListener('click', e => {
   switch (act){
     case 'scen': switchTo(k); break;
     case 'open': openDlg(); break;
-    case 'send': st.ex = null; ask(st.text, true); break;
+    case 'send': sendCurrent(); break;
     case 'collapse': closeDlg(); $('#aibtn').focus(); break;
     case 'stop': clearInterval(st.timer); st.phase = 'idle'; render(); focusSel('#ask'); break;
     case 'chip': runChip(+k); break;
@@ -1044,11 +1083,11 @@ document.addEventListener('click', e => {
     case 'exprev': goExplore(st.ex.i - 1); break;
     case 'exnext': if (st.ex.i === EX.length - 1){ st.exLast = 0; closeExplore(null, true); } else goExplore(st.ex.i + 1); break;
     case 'exgo': goExplore(+k); break;
-    case 'extry': { const i = +k; st.exLast = i; closeExplore(() => runChip(EX[i].chip)); break; }
+    case 'extry': { const i = +k; st.exLast = i; closeExplore(() => { st.pending = null; execResolved(resolveChip(EX[i].chip)); }); break; }
     case 'exask': { const i = +k; st.exLast = i; closeExplore(() => { st.text = EX[i].ask; st.optPrev = null; render(); const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }); break; }
     case 'infoact': if (k === 'demo'){ if (!st.files.some(f => f.url === RECEIPT)) st.files.push({name: '示例小票.png', kind: 'image', url: RECEIPT}); ask('根据上传的小票图片填写采购清单'); } break;
     case 'quick': { st.open = true; ask(sc.opt(st)); break; }
-    case 'inline-gen': { runChip(3); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
+    case 'inline-gen': { st.pending = null; execResolved(resolveChip(3)); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
     case 'selcol': st.sel = {r0: 1, c0: 0, r1: st.grid.length - 1, c1: 0}; openDlg(); render(); break;
     case 'clearsel': st.sel = null; render(); focusSel('#ask'); break;
     case 'optimize': optimize(); break;
@@ -1073,7 +1112,8 @@ $('#filein').addEventListener('change', e => { [...(e.target.files || [])].forEa
 document.addEventListener('input', e => {
   if (e.target.id !== 'ask') return;
   const st = S[cur]; st.text = e.target.value; st.optPrev = null; autosize();
-  if (st.info && !/^把以下内容/.test(st.text)){ st.info = null; const inf = document.querySelector('.stat.i'); if (inf) inf.remove(); }
+  if (st.pending && !st.text.startsWith(st.pending.base.trim())) st.pending = null;
+  if (st.info && !st.pending){ st.info = null; const inf = document.querySelector('.stat.i'); if (inf) inf.remove(); }
   const sb = document.querySelector('.send'); if (sb && !sb.classList.contains('stop')) sb.classList.toggle('on', st.text.trim().length > 0);
   if (st.err){ st.err = ''; const er = document.querySelector('.stat.e'); if (er) er.remove(); }
   const on = document.querySelector('.optnote'); if (on) on.remove();
@@ -1090,7 +1130,7 @@ document.addEventListener('keydown', e => {
     if (st.open && e.target.closest && e.target.closest('#dlgwrap')){ e.preventDefault(); closeDlg(); $('#aibtn').focus(); }
     return;
   }
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.id === 'ask' && st.phase !== 'gen'){ e.preventDefault(); ask(st.text, true); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.id === 'ask' && st.phase !== 'gen'){ e.preventDefault(); sendCurrent(); }
 });
 document.addEventListener('paste', e => {
   if (!S[cur].open || !e.target.closest || !e.target.closest('#dlgwrap')) return;
