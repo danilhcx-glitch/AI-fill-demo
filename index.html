@@ -999,7 +999,6 @@ function dialogHTML(){
     [0, 3, 5].forEach(i => { h += '<button class="pchip" data-act="chip" data-k="' + i + '" title="填入输入框，可补充要求后发送">' + I_EDIT + esc(FIXED[i]) + '</button>'; });
     CMD_CHIPS.forEach(i => { h += '<button class="cchip" data-act="chip" data-k="' + i + '" title="立即执行，可撤销">' + I_BOLT + esc(FIXED[i]) + '</button>'; });
     h += '<button class="ex" data-act="explore" aria-expanded="false">' + I_COMPASS + '探索一下</button>';
-    h += '</div><div class="lg"><span>' + I_EDIT.replace('stroke="currentColor"', 'stroke="#5F6670"') + '填入输入框，可补充后发送</span><span>' + I_BOLT.replace('fill="currentColor"', 'fill="#E8A317"') + '立即执行，可撤销</span>';
     h += '</div></div>';
   }
   return h + '</div>';
