@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>AI 填写全场景 Demo</title>
 <style>
 :root{
@@ -101,12 +102,15 @@ table.t td.just{animation:flash 1.4s ease-out}
 .topchip button{border:1px dashed var(--accent-line);background:var(--accent-bg);color:var(--accent-ink);font-size:13px;padding:5px 12px;border-radius:999px;display:flex;align-items:center;gap:6px}
 .topchip button.plain{border-style:solid;background:var(--win);color:var(--ink-2)}
 
-/* 简约对话框 */
+/* 简约对话框：整体跟随选区；无选区时保持文档流，位于表格下方 */
+.table-zone{position:relative;min-width:0}
 .dlg-bar{display:flex;justify-content:flex-end;margin-bottom:4px}
 .dlg-bar button{border:none;background:none;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-3);padding:4px 8px;border-radius:6px}
 .dlg-bar button:hover{background:#F2F4F7;color:var(--ink)}
 .dlg-bar svg{width:14px;height:14px}
-.dlg-wrap{margin-top:12px;max-width:600px}
+.dlg-wrap{position:relative;z-index:6;margin-top:12px;max-width:600px}
+.dlg-wrap.is-anchored{position:absolute;margin-top:0}
+.dlg-wrap.is-anchored .dlg-bar button{background:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(31,35,41,.08)}
 .dlg{border:1px solid #E1E3E7;border-radius:22px;background:#FFFFFF;box-shadow:0 6px 24px rgba(31,35,41,.08);padding:14px 14px 10px 18px;transition:border-color .15s,box-shadow .15s}
 .dlg:focus-within{border-color:#B9C9F5;box-shadow:0 6px 24px rgba(47,107,255,.10)}
 .dlg.pulse{animation:ring .8s ease-out}
@@ -124,6 +128,10 @@ table.t td.just{animation:flash 1.4s ease-out}
 .tools{display:flex;align-items:center;gap:2px;margin-top:8px}
 .ib{position:relative;width:36px;height:36px;border-radius:8px;border:none;background:none;display:flex;align-items:center;justify-content:center;color:#30343A}
 .ib:hover{background:#F2F4F7}
+.ib.nudge{background:var(--accent-bg);color:var(--accent-ink)}
+.ib.nudge::after{content:"";position:absolute;inset:3px;border:2px solid var(--accent-line);border-radius:10px;opacity:0;pointer-events:none;animation:plusNudge 1.2s ease-out 3}
+@keyframes plusNudge{0%{transform:scale(.82);opacity:.8}100%{transform:scale(1.45);opacity:0}}
+@media (prefers-reduced-motion:reduce){.ib.nudge::after{animation:none;opacity:.7;transform:none}}
 .ib svg{width:22px;height:22px}
 .ib .tt{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2B2F36;color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;display:none;pointer-events:none}
 .ib:hover .tt,.ib:focus-visible .tt{display:block}
@@ -162,6 +170,11 @@ table.t td.just{animation:flash 1.4s ease-out}
 .sugg .lg{display:flex;gap:14px;font-size:12px;color:var(--ph);margin:8px 0 0 4px}
 .sugg .lg span{display:inline-flex;align-items:center;gap:4px}
 .sugg .lg svg{width:12px;height:12px}
+
+.close-toast{position:fixed;left:50%;bottom:24px;z-index:100;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:10px;background:#2B2F36;color:#FFFFFF;box-shadow:0 8px 24px rgba(31,35,41,.18);font-size:13px;line-height:1.5;white-space:nowrap;pointer-events:none;opacity:0;visibility:hidden;transform:translate(-50%,8px);transition:opacity .18s ease-out,transform .18s ease-out,visibility .18s}
+.close-toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+@media (max-width:480px){.close-toast{bottom:16px;white-space:normal;text-align:center}}
+@media (prefers-reduced-motion:reduce){.close-toast{transition:none}}
 
 .notes{background:var(--win);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:sticky;top:12px}
 @media (max-width:1200px){.notes{position:static}}
@@ -224,7 +237,7 @@ table.t td.just{animation:flash 1.4s ease-out}
 </head>
 <body>
 <header class="top">
-  <h1>AI 填写 · 全场景交互 Demo（第三版 · 简约对话框）</h1>
+  <h1>AI 填写 · 全场景交互 Demo（第四版 · 简约对话框）</h1>
 </header>
 
 <div class="layout">
@@ -594,11 +607,10 @@ const SC = {
   }
 };
 const ORDER = [
-  ['泛化填表', '最常见', ['empty','partial']],
-  ['序号与编号', '高频', ['seqfix','seqsel']],
+  ['泛化填表', '最常见', ['empty']],
+  ['序号与编号', '高频', ['seqfix']],
   ['具体内容填写与生成', '高频', ['lesson','extract','paste','image']],
-  ['计算与数值', '常见', ['calc']],
-  ['修改、排版及其他', '长尾', ['full']]
+  ['计算与数值', '常见', ['calc']]
 ];
 const FMT_RE = /加粗|字体|字号|颜色|居中|对齐|行高|列宽|边框|底纹|美化|样式/;
 const REP_RE = /^把?[「"“]?(.+?)[」"”]?(?:都|全部)?(?:改为|改成|替换为|替换成|换成)[「"“]?(.+?)[」"”]?$/;
@@ -606,7 +618,7 @@ const REP_RE = /^把?[「"“]?(.+?)[」"”]?(?:都|全部)?(?:改为|改成|�
 /* ---------- 状态 ---------- */
 const S = {};
 function init(id){
-  S[id] = {grid: SC[id].grid(), open: false, phase: 'idle', text: '', files: [], sel: null, err: '', route: null, routeMsg: '',
+  S[id] = {grid: SC[id].grid(), open: false, phase: 'idle', text: GENERIC, files: [], sel: null, err: '', route: null, routeMsg: '',
     optPrev: null, optBusy: false, info: null, ex: null, pending: null, preview: null, snapshot: null, shown: 0, total: 0, timer: null, flash: false, applied: null, last: null, note: ''};
 }
 Object.keys(SC).forEach(init);
@@ -680,10 +692,10 @@ function plan(text){
   let source = st.files.length ? 'upload' : dataText.trim() ? 'paste' : /示例/.test(t) ? 'sample' : sc.needFile ? 'need' : sc.docRows ? 'doc' : 'sample';
   if (!dataText.trim() && !st.files.length && /拆分填入|粘贴/.test(t)) return {err: '从第二行开始粘贴要填的内容（每行一条），然后再发送'};
   if (source === 'need') return {err: '先点「+」上传图片或文件，或者直接把截图粘贴进输入框'};
-  if ((source === 'sample' || source === 'doc') && !emptyCount(g) && !cells.length) return {err: '这张表没有空白行可以填写，可以试试下方的场景'};
+  if (!generic && (source === 'sample' || source === 'doc') && !emptyCount(g) && !cells.length) return {err: '这张表没有空白行可以填写，可以试试下方的场景'};
   return {run: () => {
     const notes = pre ? [pre] : []; let res;
-    const nEmpty = emptyCount(g) || 3;
+    const emptyRows = emptyCount(g), nEmpty = emptyRows || 3;
     if (source === 'doc'){ res = listFill(g, sc.docRows, {src: sc.docSrc}); notes.push('内容来自本文档正文；悬停预览中的任意一行，可看到对应原文'); }
     else if (source === 'paste'){ res = listFill(g, parsePaste(dataText, ncols)); notes.push('已把你粘贴的 ' + parsePaste(dataText, ncols).length + ' 行内容按表头拆分'); }
     else if (source === 'upload'){
@@ -692,7 +704,7 @@ function plan(text){
       else if (sc.fileRows){ res = listFill(g, sc.fileRows, {src: sc.fileRows.map((_, i) => 'img' + i)}); notes.push('内容来自附件「' + st.files[0].name + '」（演示中识别结果为预置）；悬停预览行可看到它来自第几行'); }
       else { res = listFill(g, sc.paste ? parsePaste(sc.paste, ncols) : sampleRows(g, nEmpty)); notes.push('内容来自附件「' + st.files[0].name + '」（演示中识别结果为预置）'); }
     } else { res = listFill(g, sampleRows(g, nEmpty)); notes.push('示例数据，非真实信息，适合做模板或演示'); }
-    if (res.added) notes.push('内容比空行多，新增了 ' + res.added + ' 行');
+    if (res.added) notes.push(emptyRows ? '内容比空行多，新增了 ' + res.added + ' 行' : '已保留原有内容，新增 ' + res.added + ' 行');
     let out = {grid: res.grid, notes};
     if (cells.length) { out = restrict(out, g, selSet); out.notes = notes.concat('只处理了选中的 ' + cells.length + ' 格'); }
     return out;
@@ -730,6 +742,7 @@ function ask(text, keepText, pre){
 
 /* ---------- 固定的「猜你想要」 ---------- */
 const FIXED = ['帮我填写这份表格','序号/编号','计算/合计','补全内容','删除重复行','从文档提取内容填表'];
+const UPLOAD_FILL_PROMPT = '请根据我上传的附件内容填写这份表格：识别表头和已有内容，将附件中的信息提取到对应单元格；保留原有内容和格式，不确定或附件中没有的信息留空，不要编造。';
 const NUM_RE = /^-?[\d,，]+(\.\d+)?$/;
 function seqColOf(g){ if (!g[0] || g[0][0].k !== 'h') return -1; return g[0].findIndex(c => /序号|编号/.test(c.t)); }
 const isTotalRow = r => r.some(c => /^(合计|总计)$/.test(c.t.trim()));
@@ -861,6 +874,8 @@ function closeExplore(after, refocus){
 /* 预填类入口：填入提示词，等用户补充后发送；命令类入口：直接执行 */
 const PROMPT_CHIPS = {
   0: {base: '帮我填写这份表格。补充要求：', hint: '可以在冒号后补充要求，比如“用示例数据”；不补充也可以直接发送'},
+  1: {base: '请检查这份表格中的序号或编号，按现有顺序重新连续编号，保留原有编号格式和其他单元格内容；如有选区，只处理选中的单元格。'},
+  2: {base: '请根据这份表格中的数值计算并填写合计及占比，保留原有数据和其他单元格内容；如有选区，只处理选中的单元格，无法计算的内容留空并说明原因。'},
   3: {base: '补全表格中的空白内容。参考内容（可直接粘贴）：\n', hint: '可以在下一行粘贴参考内容（每行一条）；不粘贴也可以直接发送，AI 会按当前表格补全'},
   5: {base: '从本文档中提取内容填入表格。补充要求：', hint: '可以补充要提取的重点，比如“只要未完成的事项”；不补充也可以直接发送'}
 };
@@ -881,7 +896,7 @@ function runChip(i){
   if (PROMPT_CHIPS[i]){
     const c = PROMPT_CHIPS[i];
     st.open = true; st.err = ''; st.route = null; st.optPrev = null; st.phase = 'idle';
-    st.text = c.base; st.pending = {i, base: c.base}; st.info = {msg: c.hint};
+    st.text = c.base; st.pending = {i, base: c.base}; st.info = null;
     render(); focusEnd(); return;
   }
   st.pending = null;
@@ -897,24 +912,6 @@ function sendCurrent(){
   st.pending = null;
   ask(st.text, true);
 }
-function optimize(){
-  const st = S[cur], sc = SC[cur], t = st.text.trim();
-  if (st.optBusy || st.phase === 'gen') return;
-  st.optBusy = true; st.err = ''; render();
-  setTimeout(() => {
-    const prev = st.text; let out;
-    if (cur === 'paste'){
-      const lines = t.split('\n'), data = lines.length > 1 ? lines.slice(1).join('\n') : (parsePaste(t, 4).length && /\d/.test(t) ? t : '');
-      out = sc.opt(st, data);
-    } else if (!t || t === GENERIC) out = sc.opt(st);
-    else if (sc.noSel){ const key = Object.keys(TPL).find(k => TPL[k].kw.test(t)); out = key ? '生成一张「' + t + '」用的' + TPL[key].name + '，' + sc.tail : t + '。' + sc.tail; }
-    else if (sc.lesson && !/《/.test(t)) out = t + '。' + sc.tail;
-    else out = /[。；]$/.test(t) ? t + sc.tail : t + '。' + sc.tail;
-    st.text = out; st.optPrev = prev; st.optBusy = false; render();
-    const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-  }, 450);
-}
-
 /* ---------- 渲染 ---------- */
 function tableHTML(){
   const st = S[cur], sc = SC[cur];
@@ -977,26 +974,22 @@ function dialogHTML(){
   if (!st.open) return '';
   const cells = selCells(st), busy = st.phase === 'gen';
   let pills = '';
-  if (cells.length) pills += '<span class="pill selp"><span class="nm">已选中 ' + esc(selDesc(cells)) + '</span><button data-act="clearsel" aria-label="移除选区">' + XS + '</button></span>';
   st.files.forEach((f, i) => { pills += '<span class="pill">' + (f.url ? '<img src="' + f.url + '" alt="">' : I_FILE) + '<span class="nm">' + esc(f.name) + '</span><button data-act="rmfile" data-k="' + i + '" aria-label="移除附件 ' + esc(f.name) + '">' + XS + '</button></span>'; });
-  let h = '<div class="dlg-wrap" id="dlgwrap"><div class="dlg-bar"><button data-act="collapse" aria-label="收起 AI 填写对话框">收起<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="dlg" id="dlg">';
+  let h = '<div class="dlg-wrap' + (cells.length ? ' is-anchored' : '') + '" id="dlgwrap"><div class="dlg-bar"><button data-act="collapse" aria-label="收起 AI 填写对话框">收起<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="dlg" id="dlg">';
   if (pills) h += '<div class="pills">' + pills + '</div>';
   h += '<label class="sr-only" for="ask">向 AI 填写提问</label><textarea id="ask" rows="2" placeholder="输入问题，或从下方场景提问"' + (busy ? ' readonly' : '') + '>' + esc(st.text) + '</textarea>';
   h += '<div class="tools">';
-  h += '<button class="ib' + (st.optBusy ? ' busy' : '') + '" data-act="optimize" aria-label="优化提示词">' + I_OPT + '<span class="tt">' + (st.optBusy ? '优化中…' : '优化提示词') + '</span></button>';
   h += '<button class="ib" data-act="upload" aria-label="上传文件或图片">' + I_ADD + '<span class="tt">上传文件或图片</span></button>';
   if (st.files.length) h += '<span class="cnt">' + st.files.length + '/3</span>';
   const has = st.text.trim().length > 0;
   h += busy ? '<button class="send stop" data-act="stop" aria-label="停止生成">' + I_STOP + '</button>' : '<button class="send' + (has ? ' on' : '') + '" data-act="send" aria-label="发送">' + I_SEND + '</button>';
   h += '</div></div>';
-  if (st.optPrev != null) h += '<div class="optnote">已根据当前表格优化提示词<button class="lnk" data-act="optundo">恢复原文</button></div>';
   h += statusHTML();
   if (!busy && st.phase !== 'preview'){
     if (st.ex){ h += exploreHTML(); st.ex.anim = false; st.ex.dir = ''; return h + '</div>'; }
-    h += '<div class="sugg"><p class="lb">猜你想要</p><div class="row">';
-    [0, 3, 5].forEach(i => { h += '<button class="pchip" data-act="chip" data-k="' + i + '" title="填入输入框，可补充要求后发送">' + I_EDIT + esc(FIXED[i]) + '</button>'; });
-    CMD_CHIPS.forEach(i => { h += '<button class="cchip" data-act="chip" data-k="' + i + '" title="立即执行，可撤销">' + I_BOLT + esc(FIXED[i]) + '</button>'; });
-    h += '<button class="ex" data-act="explore" aria-expanded="false">' + I_COMPASS + '探索一下</button>';
+    h += '<div class="sugg"><div class="row">';
+    [1, 2].forEach(i => { h += '<button class="cchip" data-act="chip" data-k="' + i + '">' + I_BOLT + esc(FIXED[i]) + '</button>'; });
+    h += '<button class="upchip" data-act="upload-fill">' + I_ADD + '上传附件填写</button>';
     h += '</div></div>';
   }
   return h + '</div>';
@@ -1005,16 +998,48 @@ function renderDoc(){
   const sc = SC[cur], st = S[cur];
   let h = sc.body;
   if (sc.inline && !st.open){ const ih = sc.inline(st); if (ih) h += '<div class="topchip">' + ih + '</div>'; }
-  h += '<div class="tblwrap" id="tblwrap">' + tableHTML() + '</div>' + dialogHTML();
+  h += '<div class="table-zone" id="tablezone"><div class="tblwrap" id="tblwrap">' + tableHTML() + '</div>' + dialogHTML() + '</div>';
   const ae = document.activeElement, aid = ae && ae.id;
   let s0, s1; try { s0 = ae.selectionStart; s1 = ae.selectionEnd; } catch(e){}
   $('#page').innerHTML = h;
   if (aid === 'ask'){ const el = document.getElementById('ask'); if (el){ el.focus(); try { el.setSelectionRange(s0, s1); } catch(e){} } }
-  autosize(); placeHint();
+  autosize(); placeHint(); placeDialog(); observeDialogLayout();
   if (st.flash) setTimeout(() => { st.flash = false; }, 1500);
 }
 function autosize(){ const t = document.getElementById('ask'); if (t){ t.style.height = 'auto'; t.style.height = Math.max(52, t.scrollHeight) + 'px'; } }
 function placeHint(){ const b = document.getElementById('inhint'), tr = document.querySelector('tr[data-first-empty]'); if (b && tr){ b.style.top = tr.offsetTop + 'px'; b.style.height = tr.offsetHeight + 'px'; } }
+function placeDialog(){
+  const zone = document.getElementById('tablezone'), tbl = document.getElementById('tblwrap'), wrap = document.getElementById('dlgwrap');
+  if (!zone || !tbl) return;
+  if (!wrap){ zone.style.minHeight = ''; return; }
+  const selected = [...tbl.querySelectorAll('td.sel')];
+  if (!selected.length){
+    wrap.classList.remove('is-anchored');
+    wrap.style.removeProperty('top'); wrap.style.removeProperty('left'); wrap.style.removeProperty('width');
+    zone.style.minHeight = '';
+    return;
+  }
+  const zoneRect = zone.getBoundingClientRect(), tblRect = tbl.getBoundingClientRect();
+  if (!zoneRect.width) return;
+  const rects = selected.map(td => td.getBoundingClientRect());
+  const selectionLeft = Math.min(...rects.map(r => r.left));
+  const selectionBottom = Math.max(...rects.map(r => r.bottom));
+  const width = Math.min(600, zoneRect.width);
+  const left = Math.max(0, Math.min(selectionLeft - zoneRect.left, zoneRect.width - width));
+  const top = selectionBottom - zoneRect.top + 12;
+  wrap.classList.add('is-anchored');
+  wrap.style.width = width + 'px'; wrap.style.left = left + 'px'; wrap.style.top = top + 'px';
+  zone.style.minHeight = Math.ceil(Math.max(tblRect.bottom - zoneRect.top, top + wrap.offsetHeight)) + 'px';
+}
+let dlgResizeObserver = null;
+function observeDialogLayout(){
+  if (!('ResizeObserver' in window)) return;
+  if (!dlgResizeObserver) dlgResizeObserver = new ResizeObserver(placeDialog);
+  dlgResizeObserver.disconnect();
+  const tbl = document.getElementById('tblwrap'), wrap = document.getElementById('dlgwrap');
+  if (tbl) dlgResizeObserver.observe(tbl);
+  if (wrap) dlgResizeObserver.observe(wrap);
+}
 function renderScen(){
   let h = '', n = 0;
   ORDER.forEach(([g, share, ids]) => {
@@ -1053,7 +1078,20 @@ function openDlg(){
   if (d){ d.classList.remove('pulse'); void d.offsetWidth; d.classList.add('pulse'); }
   focusSel('#ask');
 }
-function closeDlg(){ const st = S[cur]; clearInterval(st.timer); st.open = false; st.phase = 'idle'; st.err = ''; st.route = null; render(); }
+let closeToastTimer = null;
+function closeDlg(){ const st = S[cur]; clearInterval(st.timer); clearTimeout(closeToastTimer); st.open = false; st.phase = 'idle'; st.err = ''; st.route = null; const toast = document.getElementById('close-toast'); if (toast) toast.classList.remove('show'); render(); }
+function showCloseToast(){
+  let toast = document.getElementById('close-toast');
+  if (!toast){
+    toast = document.createElement('div'); toast.id = 'close-toast'; toast.className = 'close-toast';
+    toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
+    toast.textContent = '点击右上角「收起」或按 Esc 关闭对话框';
+    document.body.appendChild(toast);
+  }
+  clearTimeout(closeToastTimer);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  closeToastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+}
 function switchTo(k){ const st = S[cur]; clearInterval(st.timer); if (st.phase === 'gen') st.phase = 'idle'; cur = k; try { history.replaceState(null, '', '#' + k); } catch(_){} render(); }
 function addFile(f){
   const st = S[cur];
@@ -1087,9 +1125,8 @@ document.addEventListener('click', e => {
     case 'inline-gen': { st.pending = null; execResolved(resolveChip(3)); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
     case 'selcol': st.sel = {r0: 1, c0: 0, r1: st.grid.length - 1, c1: 0}; openDlg(); render(); break;
     case 'clearsel': st.sel = null; render(); focusSel('#ask'); break;
-    case 'optimize': optimize(); break;
-    case 'optundo': if (st.optPrev != null){ st.text = st.optPrev; st.optPrev = null; render(); focusSel('#ask'); } break;
-    case 'upload': $('#filein').value = ''; $('#filein').click(); break;
+    case 'upload-fill': { st.open = true; st.err = ''; st.route = null; st.info = null; st.optPrev = null; st.pending = null; st.phase = 'idle'; st.text = UPLOAD_FILL_PROMPT; render(); focusEnd(); const ub = document.querySelector('.ib[data-act="upload"]'); if (ub) ub.classList.add('nudge'); break; }
+    case 'upload': { const ub = document.querySelector('.ib[data-act="upload"]'); if (ub) ub.classList.remove('nudge'); $('#filein').value = ''; $('#filein').click(); break; }
     case 'rmfile': st.files.splice(+k, 1); render(); break;
     case 'route': st.routeMsg = '演示：真实产品会打开「AI 美化表格」，并带上你的描述'; render(); break;
     case 'swap': { const c = st.preview.grid[+b.dataset.r][+b.dataset.c]; c.ai = 1 - c.ai; c.t = c.alts[c.ai]; renderDoc(); break; }
@@ -1104,7 +1141,7 @@ document.addEventListener('click', e => {
     case 'reset': clearInterval(st.timer); init(cur); render(); break;
   }
 });
-$('#aibtn').addEventListener('click', () => { if (S[cur].open && S[cur].phase !== 'gen') closeDlg(); else openDlg(); });
+$('#aibtn').addEventListener('click', () => openDlg());
 $('#filein').addEventListener('change', e => { [...(e.target.files || [])].forEach(addFile); });
 document.addEventListener('input', e => {
   if (e.target.id !== 'ask') return;
@@ -1123,8 +1160,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape'){ e.preventDefault(); closeExplore(null, true); return; }
   }
   if (e.key === 'Escape'){
-    if (st.sel && !(e.target.id === 'ask')){ st.sel = null; render(); return; }
-    if (st.open && e.target.closest && e.target.closest('#dlgwrap')){ e.preventDefault(); closeDlg(); $('#aibtn').focus(); }
+    if (st.open){ e.preventDefault(); closeDlg(); $('#aibtn').focus(); return; }
+    if (st.sel){ st.sel = null; render(); }
     return;
   }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.id === 'ask' && st.phase !== 'gen'){ e.preventDefault(); sendCurrent(); }
@@ -1137,6 +1174,7 @@ document.addEventListener('paste', e => {
 /* 框选 */
 document.addEventListener('mousedown', e => {
   const st = S[cur];
+  if (st.open && e.target.closest && !e.target.closest('#dlgwrap, .aibtn-wrap')) showCloseToast();
   const td = e.target.closest && e.target.closest('#tblwrap td[data-r]');
   if (td && !e.target.closest('button') && st.phase !== 'gen' && st.phase !== 'preview' && !SC[cur].noSel){
     if (st.phase === 'applied') st.phase = 'idle';
@@ -1159,7 +1197,8 @@ document.addEventListener('mouseover', e => {
   td.parentElement.querySelectorAll('td[data-src]').forEach(c => { const m = document.getElementById('m-' + c.dataset.src); if (m) m.classList.add('hl'); });
 });
 document.addEventListener('mouseup', () => { if (drag){ drag = false; const st = S[cur]; if (selCells(st).length && !st.open){ st.open = true; st.phase = 'idle'; } render(); } });
-window.addEventListener('resize', placeHint);
+document.addEventListener('scroll', e => { if (e.target && e.target.id === 'tblwrap') placeDialog(); }, true);
+window.addEventListener('resize', () => { placeHint(); placeDialog(); });
 window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (SC[h] && h !== cur){ cur = h; render(); } });
 render();
 })();
