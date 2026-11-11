@@ -90,8 +90,6 @@ table.t td.skel{background:var(--accent-bg);animation:pulse 1s ease-in-out infin
 table.t td[data-src]{cursor:help}
 table.t td .old{display:block;font-size:11px;color:var(--ink-3);text-decoration:line-through}
 table.t td.just{animation:flash 1.4s ease-out}
-.swap{display:inline-block;margin-left:6px;font-size:11px;border:1px solid var(--accent-line);background:var(--win);color:var(--accent-ink);border-radius:4px;padding:0 6px;line-height:18px;vertical-align:1px}
-.swap:hover{background:var(--accent-bg)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 @keyframes flash{0%{background:var(--ok-bg)}100%{background:transparent}}
 
@@ -419,7 +417,7 @@ const TPL = {
 };
 const tplGrid = key => TPL[key].build().map(r => r.map(c => Object.assign({}, c, {p: true})));
 
-/* ---------- 教案内容（预置）[标准, 换一版, 简要, 详细补充] ---------- */
+/* ---------- 教案内容（预置）[标准, 备用文案, 简要, 详细补充] ---------- */
 const LESSON = {
   '教学目标': ['1. 正确、流利、有感情地朗读课文，积累"酝酿""呼朋引伴"等词语。2. 理清"盼春—绘春—赞春"的行文思路。3. 体会作者对春天的喜爱与赞美之情。',
               '1. 通过反复朗读，读出春天的生机与情感变化。2. 学习抓住景物特点、调动多种感官描写景物的方法。3. 激发热爱自然、积极向上的情感。',
@@ -444,9 +442,9 @@ function lessonRun(st, len, onlySet, topic){
     const v = LESSON[r[ci - 1] && r[ci - 1].t]; if (!v) return;
     let t = len === '简要' ? v[2] : v[0];
     if (len === '详细' && v[3]) t = v[0] + v[3];
-    c.t = t; c.p = true; c.alts = [t, v[1]]; c.ai = 0;
+    c.t = t; c.p = true;
   }));
-  const notes = ['AI 撰写的成品内容（篇幅：' + len + '），每一栏都可以单独「换一版」'];
+  const notes = ['AI 撰写的成品内容（篇幅：' + len + '）'];
   if (topic && !/春/.test(topic)) notes.push('演示中撰写内容为预置（《春》），真实产品会按你写的课题生成');
   return {grid: g, notes};
 }
@@ -529,7 +527,7 @@ const SC = {
     notes:{scene:'具体内容 · 内容撰写', pain:'典型 query：生成教案、反思、评价、项目材料、维护记录',
       pts:[['撰写结果是成品，不标"示例"', '和"示例数据"彻底分开，不劝退老师'],
            ['课题、篇幅都可以写在需求里', '只写"生成教案"再点「优化提示词」，会补上课题、年级、栏目和篇幅'],
-           ['预览中每一栏可单独「换一版」', '内容质量参差，用户往往只想重写其中一两栏']]}
+           ['预览后可重新生成整份教案', '确认采用后才会写入表格']]}
   },
   extract: {
     label:'从会议纪要提取待办', doc:'产品周会纪要',
@@ -928,19 +926,18 @@ function tableHTML(){
       if (c.k === 'h') cls.push('h');
       if (c.k === 'l') cls.push('l');
       if (c.k === 'v' && c.cs > 1 && sc.lesson) cls.push('big');
-      let txt = esc(c.t), old = '', swap = '';
+      let txt = esc(c.t), old = '';
       if (showPv && c.p){
         if (st.phase === 'gen' && c.o >= st.shown){ cls.push('skel'); txt = ''; }
         else {
           cls.push('pv');
           if (c.old != null && c.old !== c.t) old = '<span class="old">' + esc(c.old) + '</span>';
-          if (c.alts && st.phase === 'preview') swap = '<button class="swap" data-act="swap" data-r="' + ri + '" data-c="' + ci + '">换一版</button>';
         }
       } else if (!showPv && selSet.has(ri + ',' + ci)) cls.push('sel');
       if (st.phase === 'applied' && st.flash && c.wasP) cls.push('just');
       let srcAttr = '';
       if (showPv && c.src && cls.includes('pv')) srcAttr = ' data-src="' + c.src + '" title="' + (c.src.indexOf('img') === 0 ? '来自图片第 ' + (+c.src.slice(3) + 1) + ' 行' : '悬停查看原文出处') + '"';
-      h += '<td data-r="' + ri + '" data-c="' + ci + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (c.cs > 1 ? ' colspan="' + c.cs + '"' : '') + srcAttr + '>' + old + txt + swap + '</td>';
+      h += '<td data-r="' + ri + '" data-c="' + ci + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (c.cs > 1 ? ' colspan="' + c.cs + '"' : '') + srcAttr + '>' + old + txt + '</td>';
     });
     h += '</tr>';
   });
@@ -1129,7 +1126,6 @@ document.addEventListener('click', e => {
     case 'upload': { const ub = document.querySelector('.ib[data-act="upload"]'); if (ub) ub.classList.remove('nudge'); $('#filein').value = ''; $('#filein').click(); break; }
     case 'rmfile': st.files.splice(+k, 1); render(); break;
     case 'route': st.routeMsg = '演示：真实产品会打开「AI 美化表格」，并带上你的描述'; render(); break;
-    case 'swap': { const c = st.preview.grid[+b.dataset.r][+b.dataset.c]; c.ai = 1 - c.ai; c.t = c.alts[c.ai]; renderDoc(); break; }
     case 'apply':
       st.snapshot = clone(st.grid);
       st.grid = st.preview.grid.map(r => r.map(c => ({t: c.t, k: c.k, cs: c.cs, wasP: !!c.p})));
