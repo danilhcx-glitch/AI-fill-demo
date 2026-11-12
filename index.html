@@ -106,25 +106,30 @@ table.t td.just{animation:flash 1.4s ease-out}
 .dlg-bar button{border:none;background:none;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-3);padding:4px 8px;border-radius:6px}
 .dlg-bar button:hover{background:#F2F4F7;color:var(--ink)}
 .dlg-bar svg{width:14px;height:14px}
-.dlg-wrap{position:relative;z-index:6;margin-top:12px;max-width:600px}
+.dlg-wrap{position:relative;z-index:6;margin-top:12px;width:100%;max-width:600px;box-sizing:border-box}
 .dlg-wrap.is-anchored{position:absolute;margin-top:0}
 .dlg-wrap.is-anchored .dlg-bar button{background:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(31,35,41,.08)}
-.dlg{border:1px solid #E1E3E7;border-radius:22px;background:#FFFFFF;box-shadow:0 6px 24px rgba(31,35,41,.08);padding:14px 14px 10px 18px;transition:border-color .15s,box-shadow .15s}
+.dlg{border:1px solid #E1E3E7;border-radius:22px;background:#FFFFFF;box-shadow:0 6px 24px rgba(31,35,41,.08);padding:8px 10px 8px 14px;transition:border-color .15s,box-shadow .15s}
 .dlg:focus-within{border-color:#B9C9F5;box-shadow:0 6px 24px rgba(47,107,255,.10)}
 .dlg.pulse{animation:ring .8s ease-out}
 @keyframes ring{0%{box-shadow:0 0 0 0 rgba(47,107,255,.40)}100%{box-shadow:0 0 0 10px rgba(47,107,255,0)}}
 .pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .pill{display:inline-flex;align-items:center;gap:6px;max-width:220px;background:#F2F4F7;border-radius:8px;padding:3px 4px 3px 8px;font-size:12px;color:var(--ink-2)}
 .pill.selp{background:var(--accent-bg);color:var(--accent-ink)}
+.pill.cap{border-radius:999px;padding:4px 5px 4px 9px;font-size:13px;color:var(--ink);flex:none}
+.pill.cap>svg{width:14px;height:14px;color:#E8A317;flex:none}
+.pill.cap.upload>svg{color:var(--ink-3)}
 .pill img{width:22px;height:22px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}
 .pill .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pill button{border:none;background:none;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none}
 .pill button:hover{background:rgba(0,0,0,.06)}
-.dlg textarea{display:block;width:100%;border:none;outline:none;resize:none;font-size:15px;line-height:1.7;min-height:52px;max-height:220px;background:transparent;color:var(--ink);padding:0}
+.pill.cap button{width:16px;height:16px;border-radius:50%}
+.composer{display:flex;align-items:center;gap:8px}
+.composer>.ib{flex:none}
+.dlg textarea{display:block;flex:1;min-width:0;width:auto;height:26px;min-height:26px;max-height:26px;overflow-y:auto;border:none;outline:none;resize:none;font-size:15px;line-height:1.7;background:transparent;color:var(--ink);padding:0}
 .dlg textarea:focus-visible{outline:none}
 .dlg textarea[readonly]{color:var(--ink-3)}
-.dlg textarea.prompt-preview{color:var(--ph)}
-.tools{display:flex;align-items:center;gap:2px;margin-top:8px}
+.tools{display:flex;align-items:center;gap:2px;margin-top:0;flex:none}
 .ib{position:relative;width:36px;height:36px;border-radius:8px;border:none;background:none;display:flex;align-items:center;justify-content:center;color:#30343A}
 .ib:hover{background:#F2F4F7}
 .ib svg{width:22px;height:22px}
@@ -157,6 +162,8 @@ table.t td.just{animation:flash 1.4s ease-out}
 .sugg{margin-top:14px}
 .sugg .lb{font-size:12px;color:var(--ink-3);margin:0 0 8px 4px}
 .sugg .row{display:flex;gap:8px;flex-wrap:wrap}
+.sugg .recommend{display:inline-flex;align-items:center;gap:6px;background:#F2F4F7;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:999px;cursor:default;user-select:none}
+.sugg .recommend svg{width:14px;height:14px;color:var(--ink);flex:none}
 .sugg button{border:1px solid #E1E3E7;background:#FFFFFF;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;text-align:left}
 .sugg button:hover{border-color:var(--accent-line);color:var(--accent-ink);background:#F8FAFF}
 .sugg button svg{width:13px;height:13px;color:var(--accent);flex:none}
@@ -883,8 +890,16 @@ function execResolved(r, keepText){
   if (keepText) ask(r.text, true); else ask(r.text);
 }
 function focusEnd(){ setTimeout(() => { const ta = document.getElementById('ask'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 30); }
+function insertPromptChip(i){
+  const st = S[cur], c = i === 'upload' ? {base: UPLOAD_FILL_PROMPT} : PROMPT_CHIPS[i];
+  if (!c) return;
+  st.open = true; st.err = ''; st.route = null; st.optPrev = null; st.phase = 'idle'; st.info = null;
+  st.pending = {i, base: c.base, inserted: true};
+  render(); focusEnd();
+}
 function runChip(i){
   const st = S[cur];
+  if (i === 1 || i === 2){ insertPromptChip(i); return; }
   if (PROMPT_CHIPS[i]){
     const c = PROMPT_CHIPS[i];
     st.open = true; st.err = ''; st.route = null; st.optPrev = null; st.phase = 'idle';
@@ -894,27 +909,13 @@ function runChip(i){
   st.pending = null;
   execResolved(resolveChip(i));
 }
-let promptPreview = null;
-function promptChipOf(target){
-  return target && target.closest ? target.closest('.sugg [data-act="chip"], .sugg [data-act="upload-fill"]') : null;
-}
-function showPromptPreview(chip){
-  const ta = document.getElementById('ask');
-  if (!chip || !ta || ta.readOnly || (promptPreview && promptPreview.el === chip)) return;
-  const prompt = chip.dataset.act === 'upload-fill' ? UPLOAD_FILL_PROMPT : (PROMPT_CHIPS[+chip.dataset.k] || {}).base;
-  if (!prompt) return;
-  promptPreview = {el: chip};
-  ta.value = prompt;
-  ta.classList.add('prompt-preview');
-}
-function clearPromptPreview(){
-  if (!promptPreview) return;
-  promptPreview = null;
-  const ta = document.getElementById('ask');
-  if (ta){ ta.value = S[cur].text; ta.classList.remove('prompt-preview'); autosize(); }
-}
 function sendCurrent(){
   const st = S[cur]; st.ex = null;
+  if (st.pending && st.pending.inserted){
+    const p = st.pending;
+    if (p.i === 'upload') ask(p.base, true); else execResolved(resolveChip(p.i), true);
+    return;
+  }
   if (st.pending && st.text.trim() === st.pending.base.trim()){
     const i = st.pending.i; st.pending = null;
     execResolved(resolveChip(i), true);
@@ -983,23 +984,25 @@ function dialogHTML(){
   const st = S[cur], sc = SC[cur];
   if (!st.open) return '';
   const cells = selCells(st), busy = st.phase === 'gen';
-  let pills = '';
+  let pills = '', cap = '';
+  if (st.pending && st.pending.inserted){
+    const upload = st.pending.i === 'upload', label = upload ? '上传附件填写' : FIXED[st.pending.i];
+    cap = '<span class="pill cap' + (upload ? ' upload' : '') + '">' + (upload ? I_ADD : I_BOLT) + '<span class="nm">' + esc(label) + '</span><button data-act="rmchip" aria-label="移除 ' + esc(label) + '">' + XS + '</button></span>';
+  }
   st.files.forEach((f, i) => { pills += '<span class="pill">' + (f.url ? '<img src="' + f.url + '" alt="">' : I_FILE) + '<span class="nm">' + esc(f.name) + '</span><button data-act="rmfile" data-k="' + i + '" aria-label="移除附件 ' + esc(f.name) + '">' + XS + '</button></span>'; });
   let h = '<div class="dlg-wrap' + (cells.length ? ' is-anchored' : '') + '" id="dlgwrap"><div class="dlg-bar"><button data-act="collapse" aria-label="收起 AI 填写对话框">收起<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="dlg" id="dlg">';
   if (pills) h += '<div class="pills">' + pills + '</div>';
-  h += '<label class="sr-only" for="ask">向 AI 填写提问</label><textarea id="ask" rows="2" placeholder="输入问题，或从下方场景提问"' + (busy ? ' readonly' : '') + '>' + esc(st.text) + '</textarea>';
+  h += '<div class="composer"><button class="ib" data-act="upload" aria-label="上传文件或图片">' + I_ADD + '<span class="tt">上传文件或图片</span></button>' + cap + '<label class="sr-only" for="ask">向 AI 填写提问</label><textarea id="ask" rows="1" placeholder="输入问题，或从下方场景提问"' + (busy ? ' readonly' : '') + '>' + esc(st.text) + '</textarea>';
   h += '<div class="tools">';
-  h += '<button class="ib" data-act="upload" aria-label="上传文件或图片">' + I_ADD + '<span class="tt">上传文件或图片</span></button>';
   if (st.files.length) h += '<span class="cnt">' + st.files.length + '/3</span>';
-  const has = st.text.trim().length > 0;
+  const has = st.text.trim().length > 0 || !!(st.pending && st.pending.inserted);
   h += busy ? '<button class="send stop" data-act="stop" aria-label="停止生成">' + I_STOP + '</button>' : '<button class="send' + (has ? ' on' : '') + '" data-act="send" aria-label="发送">' + I_SEND + '</button>';
-  h += '</div></div>';
+  h += '</div></div></div>';
   h += statusHTML();
   if (!busy && st.phase !== 'preview'){
     if (st.ex){ h += exploreHTML(); st.ex.anim = false; st.ex.dir = ''; return h + '</div>'; }
-    h += '<div class="sugg"><div class="row">';
+    h += '<div class="sugg"><div class="row"><span class="recommend">' + SPARK + '<span>为你推荐</span></span>';
     [1, 2].forEach(i => { h += '<button class="cchip" data-act="chip" data-k="' + i + '">' + I_BOLT + esc(FIXED[i]) + '</button>'; });
-    h += '<button class="upchip" data-act="upload-fill">' + I_ADD + '上传附件填写</button>';
     h += '</div></div>';
   }
   return h + '</div>';
@@ -1016,7 +1019,7 @@ function renderDoc(){
   autosize(); placeHint(); placeDialog(); observeDialogLayout();
   if (st.flash) setTimeout(() => { st.flash = false; }, 1500);
 }
-function autosize(){ const t = document.getElementById('ask'); if (t){ t.style.height = 'auto'; t.style.height = Math.max(52, t.scrollHeight) + 'px'; } }
+function autosize(){ const t = document.getElementById('ask'); if (t) t.style.height = '26px'; }
 function placeHint(){ const b = document.getElementById('inhint'), tr = document.querySelector('tr[data-first-empty]'); if (b && tr){ b.style.top = tr.offsetTop + 'px'; b.style.height = tr.offsetHeight + 'px'; } }
 function placeDialog(){
   const zone = document.getElementById('tablezone'), tbl = document.getElementById('tblwrap'), wrap = document.getElementById('dlgwrap');
@@ -1114,7 +1117,6 @@ function addFile(f){
 
 /* ---------- 事件 ---------- */
 document.addEventListener('click', e => {
-  clearPromptPreview();
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, k = b.dataset.k, st = S[cur], sc = SC[cur];
   switch (act){
@@ -1136,8 +1138,9 @@ document.addEventListener('click', e => {
     case 'inline-gen': { st.pending = null; execResolved(resolveChip(3)); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
     case 'selcol': st.sel = {r0: 1, c0: 0, r1: st.grid.length - 1, c1: 0}; openDlg(); render(); break;
     case 'clearsel': st.sel = null; render(); focusSel('#ask'); break;
-    case 'upload-fill': { st.open = true; st.err = ''; st.route = null; st.info = null; st.optPrev = null; st.pending = null; st.phase = 'idle'; st.text = UPLOAD_FILL_PROMPT; render(); focusEnd(); break; }
+    case 'upload-fill': insertPromptChip('upload'); break;
     case 'upload': $('#filein').value = ''; $('#filein').click(); break;
+    case 'rmchip': st.pending = null; render(); focusSel('#ask'); break;
     case 'rmfile': st.files.splice(+k, 1); render(); break;
     case 'route': st.routeMsg = '演示：真实产品会打开「AI 美化表格」，并带上你的描述'; render(); break;
     case 'apply':
@@ -1156,14 +1159,13 @@ $('#filein').addEventListener('change', e => { [...(e.target.files || [])].forEa
 document.addEventListener('input', e => {
   if (e.target.id !== 'ask') return;
   const st = S[cur]; st.text = e.target.value; st.optPrev = null; autosize();
-  if (st.pending && !st.text.startsWith(st.pending.base.trim())) st.pending = null;
+  if (st.pending && !st.pending.inserted && !st.text.startsWith(st.pending.base.trim())) st.pending = null;
   if (st.info && !st.pending){ st.info = null; const inf = document.querySelector('.stat.i'); if (inf) inf.remove(); }
-  const sb = document.querySelector('.send'); if (sb && !sb.classList.contains('stop')) sb.classList.toggle('on', st.text.trim().length > 0);
+  const sb = document.querySelector('.send'); if (sb && !sb.classList.contains('stop')) sb.classList.toggle('on', st.text.trim().length > 0 || !!(st.pending && st.pending.inserted));
   if (st.err){ st.err = ''; const er = document.querySelector('.stat.e'); if (er) er.remove(); }
   const on = document.querySelector('.optnote'); if (on) on.remove();
 });
 document.addEventListener('keydown', e => {
-  clearPromptPreview();
   const st = S[cur];
   if (st.ex && e.target.closest && e.target.closest('#explore')){
     if (e.key === 'ArrowRight'){ e.preventDefault(); goExplore(st.ex.i + 1); return; }
@@ -1203,16 +1205,9 @@ document.addEventListener('mouseover', e => {
     if (td && st.sel){ const r = +td.dataset.r, c = +td.dataset.c; if (r !== st.sel.r1 || c !== st.sel.c1){ st.sel.r1 = Math.max(SC[cur].lesson ? 0 : 1, r); st.sel.c1 = c; renderDoc(); } }
     return;
   }
-  const chip = promptChipOf(t);
-  if (chip){ showPromptPreview(chip); return; }
   document.querySelectorAll('.src.hl').forEach(x => x.classList.remove('hl'));
   const td = t.closest && t.closest('td[data-src]'); if (!td) return;
   td.parentElement.querySelectorAll('td[data-src]').forEach(c => { const m = document.getElementById('m-' + c.dataset.src); if (m) m.classList.add('hl'); });
-});
-document.addEventListener('mouseout', e => {
-  const chip = promptChipOf(e.target);
-  if (!chip || (e.relatedTarget && chip.contains(e.relatedTarget))) return;
-  if (promptPreview && promptPreview.el === chip) clearPromptPreview();
 });
 document.addEventListener('mouseup', () => { if (drag){ drag = false; const st = S[cur]; if (selCells(st).length && !st.open){ st.open = true; st.phase = 'idle'; } render(); } });
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'tblwrap') placeDialog(); }, true);
