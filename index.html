@@ -123,13 +123,10 @@ table.t td.just{animation:flash 1.4s ease-out}
 .dlg textarea{display:block;width:100%;border:none;outline:none;resize:none;font-size:15px;line-height:1.7;min-height:52px;max-height:220px;background:transparent;color:var(--ink);padding:0}
 .dlg textarea:focus-visible{outline:none}
 .dlg textarea[readonly]{color:var(--ink-3)}
+.dlg textarea.prompt-preview{color:var(--ph)}
 .tools{display:flex;align-items:center;gap:2px;margin-top:8px}
 .ib{position:relative;width:36px;height:36px;border-radius:8px;border:none;background:none;display:flex;align-items:center;justify-content:center;color:#30343A}
 .ib:hover{background:#F2F4F7}
-.ib.nudge{background:var(--accent-bg);color:var(--accent-ink)}
-.ib.nudge::after{content:"";position:absolute;inset:3px;border:2px solid var(--accent-line);border-radius:10px;opacity:0;pointer-events:none;animation:plusNudge 1.2s ease-out 3}
-@keyframes plusNudge{0%{transform:scale(.82);opacity:.8}100%{transform:scale(1.45);opacity:0}}
-@media (prefers-reduced-motion:reduce){.ib.nudge::after{animation:none;opacity:.7;transform:none}}
 .ib svg{width:22px;height:22px}
 .ib .tt{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2B2F36;color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;display:none;pointer-events:none}
 .ib:hover .tt,.ib:focus-visible .tt{display:block}
@@ -458,7 +455,6 @@ const SC = {
     chips: () => [GENERIC, '做一张会议签到表', '做一张请假申请表', '做一张部门季度团建报名表'],
     opt: () => '根据正文中的「例会」「签到」，生成一张会议签到表：列为序号、姓名、部门、签到时间、签名，预留 8 行，序号从 1 开始',
     tail: '请生成表头，并按用途调整行列数',
-    inline: () => '<button data-act="open">' + SPARK + '这张表做什么用？让 AI 生成</button>',
     tip:'空表也能用：说出用途，AI 生成表头和结构',
     notes:{scene:'泛化填表（最常见）', pain:'只说"请帮我填写这份表格"；空表时模型现在会反问',
       pts:[['点「猜你想要」里的"帮我填写这份表格"', '不会反问：按正文的"例会""签到"推断为会议签到表'],
@@ -490,12 +486,10 @@ const SC = {
     chips: () => ['重新排列序号', '从 1 开始向下顺延，格式 01', '按部门排序后重新编号'],
     opt: st => '将「序号」列从 1 开始重新连续编号，共 ' + dataIdx(st.grid).length + ' 行，沿用「1」的格式，其他列内容不动',
     tail: '只改「序号」列，其他列内容不动',
-    inline: st => { const s = seqIssues(st.grid, 0); return s.total ? '<button data-act="quick">' + SPARK + '序号不连续（' + s.total + ' 处）· 一键重排</button>' : ''; },
     tip:'序号断了、重复了，一键重排',
     notes:{scene:'序号与编号（最高频的单项操作）', pain:'典型 query：重新排列、补齐序号、向下顺延',
       pts:[['序号是确定性操作：提问后立即完成，不走预览', '写入后在输入框下方可撤销；右侧步骤条会划掉"生成中""预览"'],
-           ['格式、起始值直接写在需求里', '试试"从 5 开始编号，格式 01"或"格式 一、"'],
-           ['表格上方就近提示"序号不连续"', '不用打开对话框，一步完成']]}
+           ['格式、起始值直接写在需求里', '试试"从 5 开始编号，格式 01"或"格式 一、"']]}
   },
   seqsel: {
     label:'选中一列来编号', doc:'读书会报名名单', seqCol: 0, seqFmt:'001',
@@ -739,7 +733,7 @@ function ask(text, keepText, pre){
 }
 
 /* ---------- 固定的「猜你想要」 ---------- */
-const FIXED = ['帮我填写这份表格','序号/编号','计算/合计','补全内容','删除重复行','从文档提取内容填表'];
+const FIXED = ['帮我填写这份表格','填序号','计算','补全内容','删除重复行','从文档提取内容填表'];
 const UPLOAD_FILL_PROMPT = '请根据我上传的附件内容填写这份表格：识别表头和已有内容，将附件中的信息提取到对应单元格；保留原有内容和格式，不确定或附件中没有的信息留空，不要编造。';
 const NUM_RE = /^-?[\d,，]+(\.\d+)?$/;
 function seqColOf(g){ if (!g[0] || g[0][0].k !== 'h') return -1; return g[0].findIndex(c => /序号|编号/.test(c.t)); }
@@ -872,8 +866,8 @@ function closeExplore(after, refocus){
 /* 预填类入口：填入提示词，等用户补充后发送；命令类入口：直接执行 */
 const PROMPT_CHIPS = {
   0: {base: '帮我填写这份表格。补充要求：', hint: '可以在冒号后补充要求，比如“用示例数据”；不补充也可以直接发送'},
-  1: {base: '请检查这份表格中的序号或编号，按现有顺序重新连续编号，保留原有编号格式和其他单元格内容；如有选区，只处理选中的单元格。'},
-  2: {base: '请根据这份表格中的数值计算并填写合计及占比，保留原有数据和其他单元格内容；如有选区，只处理选中的单元格，无法计算的内容留空并说明原因。'},
+  1: {base: '请检查这份表格中的序号或编号，按现有顺序重新连续编号，保留原有编号格式和其他单元格内容'},
+  2: {base: '请根据这份表格中的数值计算并填写合计及占比，保留原有数据和其他单元格内容'},
   3: {base: '补全表格中的空白内容。参考内容（可直接粘贴）：\n', hint: '可以在下一行粘贴参考内容（每行一条）；不粘贴也可以直接发送，AI 会按当前表格补全'},
   5: {base: '从本文档中提取内容填入表格。补充要求：', hint: '可以补充要提取的重点，比如“只要未完成的事项”；不补充也可以直接发送'}
 };
@@ -899,6 +893,25 @@ function runChip(i){
   }
   st.pending = null;
   execResolved(resolveChip(i));
+}
+let promptPreview = null;
+function promptChipOf(target){
+  return target && target.closest ? target.closest('.sugg [data-act="chip"], .sugg [data-act="upload-fill"]') : null;
+}
+function showPromptPreview(chip){
+  const ta = document.getElementById('ask');
+  if (!chip || !ta || ta.readOnly || (promptPreview && promptPreview.el === chip)) return;
+  const prompt = chip.dataset.act === 'upload-fill' ? UPLOAD_FILL_PROMPT : (PROMPT_CHIPS[+chip.dataset.k] || {}).base;
+  if (!prompt) return;
+  promptPreview = {el: chip};
+  ta.value = prompt;
+  ta.classList.add('prompt-preview');
+}
+function clearPromptPreview(){
+  if (!promptPreview) return;
+  promptPreview = null;
+  const ta = document.getElementById('ask');
+  if (ta){ ta.value = S[cur].text; ta.classList.remove('prompt-preview'); autosize(); }
 }
 function sendCurrent(){
   const st = S[cur]; st.ex = null;
@@ -1101,6 +1114,7 @@ function addFile(f){
 
 /* ---------- 事件 ---------- */
 document.addEventListener('click', e => {
+  clearPromptPreview();
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, k = b.dataset.k, st = S[cur], sc = SC[cur];
   switch (act){
@@ -1122,8 +1136,8 @@ document.addEventListener('click', e => {
     case 'inline-gen': { st.pending = null; execResolved(resolveChip(3)); setTimeout(() => { const w = document.getElementById('dlgwrap'); if (w) w.scrollIntoView({block: 'nearest', behavior: 'smooth'}); }, 50); break; }
     case 'selcol': st.sel = {r0: 1, c0: 0, r1: st.grid.length - 1, c1: 0}; openDlg(); render(); break;
     case 'clearsel': st.sel = null; render(); focusSel('#ask'); break;
-    case 'upload-fill': { st.open = true; st.err = ''; st.route = null; st.info = null; st.optPrev = null; st.pending = null; st.phase = 'idle'; st.text = UPLOAD_FILL_PROMPT; render(); focusEnd(); const ub = document.querySelector('.ib[data-act="upload"]'); if (ub) ub.classList.add('nudge'); break; }
-    case 'upload': { const ub = document.querySelector('.ib[data-act="upload"]'); if (ub) ub.classList.remove('nudge'); $('#filein').value = ''; $('#filein').click(); break; }
+    case 'upload-fill': { st.open = true; st.err = ''; st.route = null; st.info = null; st.optPrev = null; st.pending = null; st.phase = 'idle'; st.text = UPLOAD_FILL_PROMPT; render(); focusEnd(); break; }
+    case 'upload': $('#filein').value = ''; $('#filein').click(); break;
     case 'rmfile': st.files.splice(+k, 1); render(); break;
     case 'route': st.routeMsg = '演示：真实产品会打开「AI 美化表格」，并带上你的描述'; render(); break;
     case 'apply':
@@ -1149,6 +1163,7 @@ document.addEventListener('input', e => {
   const on = document.querySelector('.optnote'); if (on) on.remove();
 });
 document.addEventListener('keydown', e => {
+  clearPromptPreview();
   const st = S[cur];
   if (st.ex && e.target.closest && e.target.closest('#explore')){
     if (e.key === 'ArrowRight'){ e.preventDefault(); goExplore(st.ex.i + 1); return; }
@@ -1188,9 +1203,16 @@ document.addEventListener('mouseover', e => {
     if (td && st.sel){ const r = +td.dataset.r, c = +td.dataset.c; if (r !== st.sel.r1 || c !== st.sel.c1){ st.sel.r1 = Math.max(SC[cur].lesson ? 0 : 1, r); st.sel.c1 = c; renderDoc(); } }
     return;
   }
+  const chip = promptChipOf(t);
+  if (chip){ showPromptPreview(chip); return; }
   document.querySelectorAll('.src.hl').forEach(x => x.classList.remove('hl'));
   const td = t.closest && t.closest('td[data-src]'); if (!td) return;
   td.parentElement.querySelectorAll('td[data-src]').forEach(c => { const m = document.getElementById('m-' + c.dataset.src); if (m) m.classList.add('hl'); });
+});
+document.addEventListener('mouseout', e => {
+  const chip = promptChipOf(e.target);
+  if (!chip || (e.relatedTarget && chip.contains(e.relatedTarget))) return;
+  if (promptPreview && promptPreview.el === chip) clearPromptPreview();
 });
 document.addEventListener('mouseup', () => { if (drag){ drag = false; const st = S[cur]; if (selCells(st).length && !st.open){ st.open = true; st.phase = 'idle'; } render(); } });
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'tblwrap') placeDialog(); }, true);
